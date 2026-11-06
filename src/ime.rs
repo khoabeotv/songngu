@@ -400,7 +400,7 @@ impl<'a> Session<'a> {
         self.committed(&v);
         self.shown.clear();
         let doubt = if self.doubtful(&v) { doubt_of(&v) } else { None };
-        self.tail = v.differs().then(|| Tail { word: v.text.clone(), seps: String::new(), doubt });
+        self.tail = Some(Tail { word: v.text.clone(), seps: String::new(), doubt });
     }
 
     /// `before`: chữ ngay trước con trỏ trong app (None nếu app không cho đọc, hoặc đường xoá lùi). Cần ở đầu từ
@@ -467,10 +467,13 @@ impl<'a> Session<'a> {
         if self.eng.is_empty() {
             self.auto_flip = None;
             self.untracked = !self.blind && before.is_none();
-            let reopened = before
-                .filter(|_| reopen_ok && !self.blind)
-                .and_then(trailing_word)
-                .filter(|(w, p)| self.eng.reopen(w, p.as_deref()));
+            let candidate = if self.trusting() {
+                // không đọc được chữ: đã xoá hết dấu ngăn cách sau từ vừa gõ thì từ đó đang ngay trước con trỏ
+                self.tail.as_ref().filter(|t| t.seps.is_empty()).map(|t| (t.word.clone(), self.eng.last_context()))
+            } else {
+                before.filter(|_| reopen_ok).and_then(trailing_word)
+            };
+            let reopened = candidate.filter(|(w, p)| self.eng.reopen(w, p.as_deref()));
             if let Some((w, _)) = reopened {
                 // từ dính trước con trỏ đã nằm trong app: gõ tiếp vào chính nó
                 self.shown = w;

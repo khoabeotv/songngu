@@ -285,6 +285,25 @@ fn one_cursor_move_is_not_a_lagging_app() {
 }
 
 #[test]
+fn deleting_the_space_after_a_word_lets_typing_continue_into_it() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        app.run(&mut s, "xin chao tieeng <s ");
+        assert!(app.doc.ends_with(" tiếng "), "{}", app.doc);
+    }
+    // ô không cho đọc chữ (Zalo, vài app Flutter): nhớ từ vừa gõ
+    let mut s = session();
+    let mut app = App { opaque: true, ..Default::default() };
+    app.run(&mut s, "xin chao tieeng <s ");
+    assert!(app.doc.ends_with(" tiếng "), "{}", app.doc);
+    // chưa xoá hết dấu ngăn cách: từ mới
+    let mut s = blind();
+    let mut app = App::default();
+    app.run(&mut s, "tieeng, <s");
+    assert_eq!(app.doc, "tiêng,s");
+}
+
+#[test]
 fn typing_right_after_a_word_reopens_it() {
     let mut s = session();
     let mut app = App { doc: "xin chào tiêng".into(), ..Default::default() };

@@ -32,7 +32,7 @@ Không có vùng soạn (gạch chân): mỗi phím vào app ngay; engine đổi
   - Khác ngay sau một lần thay, hoặc 3 lần thay liền app không báo vị trí con trỏ = app không thay được: app đó chuyển hẳn sang chặn phím (ghi `tap` trong `settings.tsv`). Một lần lỡ nhịp (Flutter, Electron báo vị trí trễ ở đầu ô nhập) thì riêng lần đó sửa bằng phím giả.
   - App không cho đọc chữ (Zalo, vài app Flutter) thì thay theo vị trí con trỏ, không kiểm.
 - **Chặn phím** (`KeyTap.m`; terminal, app tự phát hiện ở trên, hoặc menu "Chặn phím ở app này"): bắt phím ở cấp phiên (CGEventTap, cần quyền Trợ năng), xoá bằng Backspace giả rồi gõ chữ mới bằng phím mang chuỗi Unicode; phím không đổi gì thì để phím thật đi qua.
-  - Không đọc được chữ trong app nên không mở lại từ trước con trỏ; click chuột, Enter, mũi tên kết thúc từ.
+  - Không đọc được chữ trong app nên chỉ mở lại được từ bộ gõ vừa đưa vào; click chuột, Enter, mũi tên kết thúc từ.
   - Chỉ chạy khi Songngu là nguồn nhập đang chọn. Chưa có quyền thì lớp IMK thử ký tự DEL qua `insertText` (Ghostty bỏ qua).
   - Bộ gõ chặn phím khác (XKey, EVKey...) chạy cùng thì hai bên giành phím: Ctrl+Space không đổi nguồn nhập, app không gửi phím qua bộ gõ.
 
@@ -43,7 +43,7 @@ Hành vi chung:
   - Esc (app thường): lật chữ bộ gõ vừa đưa vào; từ trước con trỏ chỉ khi lúc gõ bộ gõ còn phân vân (chênh dưới 1000 lần) hoặc người dùng đã lật nó. Không có gì để lật thì Esc là của app. Esc lần nữa trong 1 giây (`esc_undo_window`) trả lại chữ, bỏ điều vừa học, đưa Esc cho app.
   - Ctrl+Esc / Shift+Esc (`Flip`): mọi app, lật cả chữ bộ gõ không gõ ra. Terminal/IDE chỉ có cách này.
 - Mỗi lần lật được nhớ vào `memory.tsv` (`memory.rs`).
-- Backspace trong từ xoá chữ đang hiện, giữ dấu ("tiếng" -> "tiến"); chỉ mất chữ cuối thì để chính phím Backspace đi vào app. Gõ ngay sau một từ đã có thì mở lại từ đó ("tiêng" + s -> "tiếng", chỉ đường thay chữ).
+- Backspace trong từ xoá chữ đang hiện, giữ dấu ("tiếng" -> "tiến"); chỉ mất chữ cuối thì để chính phím Backspace đi vào app. Gõ ngay sau một từ đã có thì mở lại từ đó ("tiêng" + s -> "tiếng"). Không đọc được chữ (chặn phím, ô không cho đọc) thì chỉ mở lại từ vừa gõ khi đã xoá hết dấu ngăn cách sau nó (gõ "tieeng ", Backspace, s -> "tiếng").
 - Enter, Tab, mũi tên, phím tắt, click chuột: kết thúc từ (sửa nốt chữ nếu cần) rồi để app xử lý.
 - Terminal/IDE (danh sách trong `src/settings.rs`) nghiêng tiếng Anh ×5, Esc là của app.
 - Engine lỗi (panic) thì bộ gõ tự tắt, phím đi thẳng vào app.
