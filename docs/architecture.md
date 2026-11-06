@@ -1,0 +1,56 @@
+# Kiến trúc
+
+Không có chế độ Anh/Việt: mỗi phím chạy song song nhánh Telex và nhánh phím gốc, hiện chữ của nhánh có xác suất cao hơn. Mục tiêu: chữ đúng ngay lúc gõ, không phải đợi Space mới sửa, và sửa được bằng một phím khi đoán sai.
+
+## Engine (`src/`)
+
+- `syllable.rs`: tập âm tiết sinh từ luật ghép vần, đặt dấu thanh kiểu mới/cũ.
+- `telex.rs`: ghép phím (Telex, VNI, `[ ]`), dấu gõ tự do thứ tự, gõ lặp để huỷ. Đếm thao tác người gõ Telex hiếm làm (đổi dấu thanh giữa chừng, thêm mũ/móc sau dấu thanh) và dấu gõ muộn (mũ, đ không liền sau chữ của nó) để phạt nhánh Việt: "these" không thành "thế", "did"/"theme" vẫn là tiếng Anh (`odd_penalty`, `late_penalty`).
+- `lexicon.rs`: mảng đã sắp xếp + tần suất cộng dồn, tiền tố = một đoạn liên tiếp, tra không cấp phát; viết tắt có đ (đc, sđt); bigram chữ cái cho từ Anh chưa gặp.
+- `context.rs`: học từ văn bản song ngữ; bảng cặp từ CSR (số hiệu từ xếp theo dạng không dấu, 8 byte mỗi cặp, cờ lớp từ để cộng tiền tố không đọc chuỗi). Trigram đã thử (cắt ≥3/5/10): không đổi từ sai nào trên dev, file nặng thêm 10-21 MB, nên không dùng.
+- `store.rs`: định dạng nhị phân của mô hình, mmap, kiểm biên và UTF-8 một lần lúc nạp.
+- `engine.rs`: `P(w | trước) = λ·bigram + (1-λ)·P(tiếng | lịch sử)·P(w | tiếng)`, nhân hệ số chữ hoa và kiểu nối; giữa từ dùng cùng công thức cho tiền tố. Dấu ngăn cách chờ tới phím đầu của từ sau mới áp vào ngữ cảnh: dính liền hai từ thì `.` không phải hết câu. `P(tiếng | lịch sử)` trộn xác suất học từ corpus với tỉ lệ Anh/Việt 20 từ vừa gõ.
+- `memory.rs`: mỗi lần lật cộng cặp (từ trước, từ được chọn) với trọng số 20 lần gặp, và hệ số ưu tiên theo từ.
+- `ime.rs`: logic phím độc lập hệ điều hành (nhìn từ sau, thay chữ trước con trỏ, mở lại từ, lật, phát hiện app không thay được chữ). `ffi.rs`: C ABI cho lớp OS. `settings.rs`: app bỏ qua/kiểu code/chặn phím, tuỳ chọn.
+- `typing.rs`: người gõ giả lập cho bộ đo (xem `evaluation.md`).
+
+"Học" là đếm (không mạng neural):
+
+- Tần suất từ trong miền, xác suất đổi thứ tiếng theo 2 từ trước, chữ hoa (viết tắt giữa câu tách khỏi tiêu đề viết hoa), cặp từ liền nhau.
+- Kiểu nối với từ trước: cách bằng khoảng trắng hay dính liền bằng `.` `-` `_` (Nest.js, low-fidelity); theo tiếng từ trước vì phiên âm Việt cũng nối bằng `-`.
+- Thứ tiếng của từ sau còn đếm theo từng từ trước, làm mượt về xác suất theo tiếng: sau "deal", "company" người Việt hay viết tiếp tiếng Việt ("deal sẽ close").
+- Âm tiết Việt đúng luật mà danh sách tần suất thiếu được thêm nếu corpus gặp từ 2 lần (xịn xò); chưa gặp bao giờ (Bình Thạnh, bún riêu, giúm) thì vẫn là phương án với xác suất rất nhỏ (`unseen_vn`), để ngữ cảnh quyết.
+
+`model.bin` gồm từ điển chung + ngữ cảnh, mọi bảng là mảng số căn 8 byte (`store.rs`). Bộ gõ mmap file: nạp ~1 ms, không parse, trang file chỉ đọc không tính vào bộ nhớ riêng của tiến trình. Thay file bằng đổi tên (`save-model` tự làm), không ghi đè tại chỗ khi bộ gõ đang chạy. Không có `model.bin` thì đọc `data/`, gõ không ngữ cảnh.
+
+## Lớp bộ gõ (`src/ime.rs`, `platform/macos/`)
+
+Không có vùng soạn (gạch chân): mỗi phím vào app ngay; engine đổi chữ ("tá" -> "task") thì xoá đúng phần khác trước con trỏ rồi chèn phần mới, bằng một trong hai đường:
+
+- **Thay chữ** (mặc định, `SongnguController.m`): `insertText:replacementRange:` của app, không bắn Backspace giả nên không tranh với phím thật.
+  - Đầu mỗi phím, bộ gõ so chữ trước con trỏ với chữ nó đã để lại. Khác sau phím thường = con trỏ đã bị click đi, bắt đầu từ mới. So ở phím sau chứ không ngay sau khi thay vì Chrome/Electron cập nhật chữ đọc được hơi trễ.
+  - Khác ngay sau một lần thay, hoặc app không báo vị trí con trỏ = app không thay được: app đó chuyển hẳn sang chặn phím (ghi `tap` trong `settings.tsv`).
+  - App không cho đọc chữ (Zalo, vài app Flutter) thì thay theo vị trí con trỏ, không kiểm.
+- **Chặn phím** (`KeyTap.m`; terminal, app tự phát hiện ở trên, hoặc menu "Chặn phím ở app này"): bắt phím ở cấp phiên (CGEventTap, cần quyền Trợ năng), xoá bằng Backspace giả rồi gõ chữ mới bằng phím mang chuỗi Unicode; phím không đổi gì thì để phím thật đi qua.
+  - Không đọc được chữ trong app nên không mở lại từ trước con trỏ; click chuột, Enter, mũi tên kết thúc từ.
+  - Chỉ chạy khi Songngu là nguồn nhập đang chọn. Chưa có quyền thì lớp IMK thử ký tự DEL qua `insertText` (Ghostty bỏ qua).
+  - Bộ gõ chặn phím khác (XKey, EVKey...) chạy cùng thì hai bên giành phím: Ctrl+Space không đổi nguồn nhập, app không gửi phím qua bộ gõ.
+
+Hành vi chung:
+
+- **Nhìn từ sau**: từ còn phân vân (hai phương án chênh dưới 10⁴ lần) để từ sau đổi lại ("xin visa may mắn" -> "xin vía may mắn"). Từ sau phải làm phương án kia hơn 3 lần, tính cả xác suất đổi tiếng ("Tô subtle" -> "Too subtle") và kiểu nối ("lơ-fidelity" -> "low-fidelity").
+- **Lật**, theo thứ tự: từ đang gõ; lần từ sau vừa tự đổi từ trước (hoàn tác); từ vừa gõ xong (còn trong 4 dấu ngăn cách); từ ngay trước con trỏ (chỉ đường thay chữ). Bộ gõ nhớ 64 từ gần nhất cùng phím đã gõ; chữ khác (dán vào, gõ từ trước) thì chữ Latin thành Telex của nó, chữ Việt thành phím Telex với phím dấu thanh đặt chỗ cho ra từ Anh có thật ("tét" -> "test").
+  - Esc (app thường): lật chữ bộ gõ vừa đưa vào; từ trước con trỏ chỉ khi lúc gõ bộ gõ còn phân vân (chênh dưới 1000 lần) hoặc người dùng đã lật nó. Không có gì để lật thì Esc là của app. Esc lần nữa trong 1 giây (`esc_undo_window`) trả lại chữ, bỏ điều vừa học, đưa Esc cho app.
+  - Ctrl+Esc / Shift+Esc (`Flip`): mọi app, lật cả chữ bộ gõ không gõ ra. Terminal/IDE chỉ có cách này.
+- Mỗi lần lật được nhớ vào `memory.tsv` (`memory.rs`).
+- Backspace trong từ xoá chữ đang hiện, giữ dấu ("tiếng" -> "tiến"); chỉ mất chữ cuối thì để chính phím Backspace đi vào app. Gõ ngay sau một từ đã có thì mở lại từ đó ("tiêng" + s -> "tiếng", chỉ đường thay chữ).
+- Enter, Tab, mũi tên, phím tắt, click chuột: kết thúc từ (sửa nốt chữ nếu cần) rồi để app xử lý.
+- Terminal/IDE (danh sách trong `src/settings.rs`) nghiêng tiếng Anh ×5, Esc là của app.
+- Engine lỗi (panic) thì bộ gõ tự tắt, phím đi thẳng vào app.
+
+## macOS
+
+- `Info.plist` khai báo nguồn nhập; biểu tượng `icon.pdf` (vẽ bằng `mkicon.m`) là ảnh template 20×16 pt, hệ thống tô theo giao diện sáng/tối.
+- `build.sh` ký bằng chứng chỉ "Songngu Dev" nếu có trong keychain: quyền Trợ năng gắn với chứng chỉ nên còn nguyên qua các lần build. Không có thì ký ad-hoc, mỗi lần build phải cấp lại quyền.
+- Phát hành cho người khác: cần ký Developer ID (`codesign --options runtime --sign "Developer ID Application: …"`), notarize (`xcrun notarytool submit … --wait`) và `xcrun stapler staple`; xem lại điều kiện phân phối mô hình trong `NOTICE`.
+- Ghi vết gỡ lỗi: tạo file `~/Library/Application Support/Songngu/trace` rồi khởi động lại bộ gõ; `trace.log` cạnh đó ghi mọi sự kiện kèm chữ gõ. Xoá cả hai khi xong.

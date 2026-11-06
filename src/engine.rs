@@ -1,0 +1,672 @@
+//! Phiên gõ: chạy song song nhánh Việt (Telex) và nhánh Anh (phím gốc), chọn chữ hiển thị sau mỗi phím,
+//! chốt ở ranh giới từ. Không có "chế độ": từ trước chỉ là ngữ cảnh.
+//!
+//! Điểm mỗi nhánh = P(chữ | từ trước), với
+//!   P(w | prev) = λ·C(prev, w)/C(prev) + (1-λ)·P(tiếng | tiếng trước)·P(w | tiếng)
+//!   P(w | tiếng) = μ·tần suất trong miền + (1-μ)·tần suất chung
+//! Giữa từ dùng cùng công thức cho tiền tố (cộng mọi từ còn gõ tiếp thành được).
+
+use crate::context::{after_separator, all_caps, canon, case_class, join_class, key_to_word, Context, Successors, START};
+use crate::syllable::decompose;
+use crate::lexicon::{compatible_prefix, EnLex, VnLex};
+use crate::memory::Memory;
+use crate::telex::{keys_for, Composer, TelexOpts};
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Lang {
+    Vn,
+    En,
+}
+
+#[derive(Clone, Debug)]
+pub struct Config {
+    /// hoà/khoẻ/thuỷ (true) hay hòa/khỏe/thủy.
+    pub modern: bool,
+    /// Không có ngữ cảnh học: P(từ này cùng thứ tiếng với từ trước).
+    pub stick: f64,
+    /// Giữa từ, chỉ đổi chữ đang hiện khi bên kia hơn ít nhất ngần này lần (giảm nhảy chữ).
+    pub flip_ratio: f64,
+    /// μ: trọng số tần suất trong miền so với tần suất chung.
+    pub dom_weight: f64,
+    /// Dùng bigram (false: chỉ tần suất + xác suất đổi tiếng).
+    pub bigram: bool,
+    /// γ: trọng số tỉ lệ Anh/Việt của chính những từ vừa gõ so với xác suất đổi tiếng học từ corpus.
+    /// Người hay viết câu tiếng Anh (chat) và bài báo gần như thuần Việt cần tiên nghiệm khác nhau.
+    pub cache_weight: f64,
+    /// Ghi nhớ lựa chọn khi người dùng lật từ.
+    pub learn: bool,
+    /// Xem lại từ trước bằng từ sau có tính xác suất đổi tiếng (xem `next_support`).
+    pub lookahead_switch: bool,
+    /// Tính kiểu nối với từ trước (`join_class`).
+    pub join: bool,
+    /// Âm tiết đúng luật chưa gặp bao giờ tính như gặp nghần này lần trong danh sách tần suất (0 = không phải từ).
+    pub unseen_vn: f64,
+    /// Độ mạnh làm mượt xác suất đổi tiếng theo từng từ trước (`lang_after`); 0 = chỉ theo tiếng hai từ trước.
+    pub word_switch: f64,
+    pub telex: TelexOpts,
+    /// Nhân xác suất tiếng Anh (Terminal, IDE: > 1).
+    pub en_bias: f64,
+    /// Phạt mỗi thao tác người gõ Telex hiếm làm (xem `order_penalty`).
+    pub odd_penalty: f64,
+    /// Phạt mỗi lần đặt mũ/đ muộn (Composer::late). Dev: 0,01 cân giữa từ Anh trùng dạng (theme, Cocos) và người quen gõ dấu sau.
+    pub late_penalty: f64,
+    /// Từ được tính là "nói rõ thứ tiếng" khi hai phương án chênh nhau hơn nghần này lần.
+    pub informative_ratio: f64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            modern: true,
+            stick: 0.8,
+            flip_ratio: 4.0,
+            dom_weight: 0.5,
+            bigram: true,
+            cache_weight: 0.3,
+            learn: true,
+            lookahead_switch: true,
+            join: true,
+            unseen_vn: 0.0003,
+            word_switch: 10.0,
+            telex: TelexOpts::default(),
+            en_bias: 1.0,
+            odd_penalty: 0.05,
+            late_penalty: 0.01,
+            informative_ratio: 10.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct View {
+    pub text: String,
+    pub lang: Lang,
+    pub vn_text: String,
+    pub en_text: String,
+    pub vn_p: Option<f64>,
+    pub en_p: Option<f64>,
+}
+
+impl View {
+    pub fn differs(&self) -> bool {
+        self.vn_text != self.en_text
+    }
+}
+
+pub struct Engine<'a> {
+    vn: &'a VnLex,
+    en: &'a EnLex,
+    ctx: Option<&'a Context>,
+    pub cfg: Config,
+    prev: String,
+    /// Số hiệu của `prev` trong bảng cặp từ (tra một lần khi `prev` đổi, không phải mỗi phím).
+    prev_id: Option<u32>,
+    prev_lang: Option<Lang>,
+    prev2_lang: Option<Lang>,
+    /// Thứ tiếng của các từ gần đây (chỉ từ nói rõ thứ tiếng), mới nhất ở cuối.
+    recent: std::collections::VecDeque<Lang>,
+    keys: String,
+    comp: Composer,
+    shown: Option<Lang>,
+    /// Người dùng đã ép thứ tiếng cho từ đang gõ (`toggle_current`).
+    force: Option<Lang>,
+    memory: Memory,
+    /// Từ vừa chốt, còn lật được cho tới khi gõ chữ của từ sau.
+    last: Option<Last>,
+    /// Ký tự ngăn cách gõ sau từ vừa chốt, chưa áp vào ngữ cảnh: tới phím đầu của từ sau mới biết chúng dính liền hai
+    /// từ (Nest.js: không phải hết câu) hay không. Khoảng trắng thì áp ngay.
+    run: String,
+    /// `run` bắt đầu ngay sau một từ.
+    after_word: bool,
+    /// Kiểu nối của từ đang gõ với từ trước (`join_class`).
+    join: usize,
+    /// Từ trước viết hoa toàn bộ.
+    prev_caps: bool,
+}
+
+struct Last {
+    vn_text: String,
+    en_text: String,
+    lang: Lang,
+    /// Ngữ cảnh trước từ này (khoá `canon` của từ trước nữa).
+    prev: String,
+    /// Đã được tính vào `recent`.
+    counted: bool,
+}
+
+/// Mỗi lần người dùng lật từ bằng ngang ngần này lần gặp cặp từ đó trong corpus: một lần sửa đã đủ để lần sau
+/// cùng ngữ cảnh tự đúng, trừ khi corpus rất chắc chắn điều ngược lại.
+const PERSONAL: f64 = 20.0;
+
+/// Số từ gần nhất dùng để ước tỉ lệ Anh/Việt của người đang gõ.
+const RECENT: usize = 20;
+
+/// Trộn hai nguồn tần suất; None khi cả hai không biết từ/tiền tố này.
+fn mix(dom: Option<f64>, sub: Option<f64>, mu: f64) -> Option<f64> {
+    (dom.is_some() || sub.is_some()).then(|| mu * dom.unwrap_or(0.0) + (1.0 - mu) * sub.unwrap_or(0.0))
+}
+
+impl<'a> Engine<'a> {
+    pub fn new(vn: &'a VnLex, en: &'a EnLex, cfg: Config) -> Self {
+        let cfg_telex = cfg.telex;
+        Engine {
+            vn,
+            en,
+            ctx: None,
+            cfg,
+            prev: START.into(),
+            prev_id: None,
+            prev_lang: None,
+            prev2_lang: None,
+            recent: std::collections::VecDeque::new(),
+            keys: String::new(),
+            comp: Composer::new(cfg_telex),
+            shown: None,
+            force: None,
+            memory: Memory::default(),
+            last: None,
+            run: String::new(),
+            after_word: false,
+            join: 0,
+            prev_caps: false,
+        }
+    }
+
+    /// Áp các ký tự ngăn cách đang hoãn vào ngữ cảnh (kết câu -> START, số -> NUM).
+    fn flush_run(&mut self) {
+        for c in std::mem::take(&mut self.run).chars() {
+            if let Some(p) = after_separator(c) {
+                if self.prev != p {
+                    self.set_prev(p.into());
+                }
+            }
+        }
+        self.after_word = false;
+    }
+
+    pub fn memory(&self) -> &Memory {
+        &self.memory
+    }
+
+    pub fn set_memory(&mut self, m: Memory) {
+        self.memory = m;
+    }
+
+    pub fn with_context(mut self, ctx: &'a Context) -> Self {
+        self.ctx = Some(ctx);
+        let p = self.prev.clone();
+        self.set_prev(p);
+        self
+    }
+
+    /// Đổi từ trước (khoá `canon`), trả từ trước cũ.
+    fn set_prev(&mut self, key: String) -> String {
+        self.prev_id = self.ctx.and_then(|c| c.word_id(&key));
+        std::mem::replace(&mut self.prev, key)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.keys.is_empty()
+    }
+
+    fn mu(&self) -> f64 {
+        if self.ctx.is_some() {
+            self.cfg.dom_weight
+        } else {
+            0.0
+        }
+    }
+
+    // ---- P(w | tiếng) ----
+
+    fn vn_word(&self) -> Option<f64> {
+        if self.comp.undone {
+            return None;
+        }
+        let (s, t) = (self.comp.toneless(), self.comp.tone);
+        mix(self.ctx.and_then(|c| c.vn.word_prob(&s, t)), self.vn.word_prob(&s, t), self.mu())
+            // âm tiết hiếm (đờ, giúm, xuê) có thật nhưng ngoài phụ đề và corpus: vẫn còn là phương án, để ngữ cảnh quyết.
+            // Chỉ khi có ngữ cảnh: không có thì từ Anh lạ cũng không có xác suất, ROAS sẽ thành ROÁ.
+            .or_else(|| self.ctx.and(self.vn.unseen_prob(&s, t, self.cfg.unseen_vn)))
+    }
+
+    fn vn_prefix(&self, s: &[char], t: crate::syllable::Tone) -> Option<f64> {
+        mix(self.ctx.and_then(|c| c.vn.prefix_prob(s, t)), self.vn.prefix_prob(s, t), self.mu())
+    }
+
+    fn en_word(&self, w: &str) -> Option<f64> {
+        mix(self.ctx.and_then(|c| c.en.word_prob(w)), self.en.word_prob(w), self.mu())
+    }
+
+    fn en_prefix(&self, w: &str) -> Option<f64> {
+        mix(self.ctx.and_then(|c| c.en.prefix_prob(w)), self.en.prefix_prob(w), self.mu())
+    }
+
+    /// Nhánh Anh: phím gốc; nếu đã gõ lặp để huỷ thì thử thêm bản đã gộp ("isssue" -> "issue").
+    /// Không phải từ đã biết: giữ đúng phím đã gõ (Asus, mirrorless), xác suất theo mô hình từ chưa gặp.
+    /// Trả (chữ hiện, chữ thường của nó, xác suất).
+    fn en_side(&self, prob: impl Fn(&str) -> Option<f64>, whole: bool) -> (String, String, Option<f64>) {
+        let low = self.keys.to_ascii_lowercase();
+        if let Some(p) = prob(&low) {
+            return (self.keys.clone(), low, Some(p));
+        }
+        if self.comp.undone {
+            let lit = self.comp.literal();
+            let lit_low = lit.to_ascii_lowercase();
+            if let Some(p) = prob(&lit_low) {
+                return (lit, lit_low, Some(p));
+            }
+        }
+        let oov = self.ctx.map(|c| c.en_unseen).map(|u| u * self.en.chars.prob(&low, whole));
+        (self.keys.clone(), low, oov.filter(|&p| p > 0.0))
+    }
+
+    /// P(phím | từ Việt) thô: người gõ Telex hiếm khi đổi dấu thanh giữa chừng hay thêm mũ/móc sau dấu thanh
+    /// ("these" -> thế, "CORS" -> CÓ), nên chuỗi phím kiểu đó nghiêng về tiếng Anh.
+    fn order_penalty(&self) -> f64 {
+        self.cfg.odd_penalty.powi(self.comp.odd as i32) * self.cfg.late_penalty.powi(self.comp.late as i32)
+    }
+
+    // ---- ngữ cảnh ----
+
+    /// P(từ sau là tiếng `lang` | từ trước `id`, tiếng hai từ trước): số đếm theo từng từ, làm mượt về xác suất theo
+    /// tiếng với độ mạnh `word_switch`. Từ riêng có thói quen riêng: sau "deal", "company" người Việt hay viết tiếp
+    /// tiếng Việt ("deal sẽ close"), sau "sẽ" hay là động từ Anh.
+    fn lang_after(&self, c: &Context, id: Option<u32>, prev2: Option<Lang>, prev: Option<Lang>, lang: Lang) -> f64 {
+        let base = c.switch(prev2, prev, lang);
+        let k = self.cfg.word_switch;
+        match id.filter(|_| k > 0.0) {
+            Some(id) => {
+                let n = c.next_lang(id);
+                let l = if lang == Lang::Vn { 0 } else { 1 };
+                (n[l] + k * base) / (n[0] + n[1] + k)
+            }
+            None => base,
+        }
+    }
+
+    fn prior(&self, lang: Lang) -> f64 {
+        let bias = if lang == Lang::En { self.cfg.en_bias } else { 1.0 };
+        bias * match self.ctx {
+            Some(c) => {
+                let n = self.recent.iter().filter(|&&l| l == lang).count() as f64;
+                let cache = (n + 1.0) / (self.recent.len() as f64 + 2.0);
+                let g = self.cfg.cache_weight;
+                (1.0 - g) * self.lang_after(c, self.prev_id, self.prev2_lang, self.prev_lang, lang) + g * cache
+            }
+            None => match self.prev_lang {
+                None => 0.5,
+                Some(l) if l == lang => self.cfg.stick,
+                Some(_) => 1.0 - self.cfg.stick,
+            },
+        }
+    }
+
+    /// λ·(phần bigram) + (1-λ)·prior·P(w|tiếng). `bigram_mass` nhận bảng từ theo sau, trả tổng số đếm khớp.
+    /// Bảng bigram = corpus + bộ nhớ riêng (nhân PERSONAL); λ Witten-Bell tính trên bảng gộp.
+    fn contextual(&self, lang: Lang, uni: f64, bigram_mass: impl Fn(&dyn Successors) -> f64) -> f64 {
+        let base = self.prior(lang) * uni;
+        let (mut mass, mut total, mut types) = (0.0, 0.0, 0.0);
+        let corpus = self.ctx.zip(self.prev_id).and_then(|(c, id)| c.follow_id(id));
+        if let Some(f) = corpus.filter(|_| self.cfg.bigram) {
+            mass += bigram_mass(&f);
+            total += f.total();
+            types += f.types();
+        }
+        if let Some(f) = self.memory.follow(&self.prev) {
+            mass += PERSONAL * bigram_mass(f);
+            total += PERSONAL * f.total();
+            types += f.types();
+        }
+        let p = if total > 0.0 {
+            let l = total / (total + types);
+            l * mass / total + (1.0 - l) * base
+        } else {
+            base
+        };
+        // Chữ hoa là bằng chứng riêng về thứ tiếng: P(w, kiểu hoa | trước) ≈ P(w | trước) · P(tiếng | kiểu hoa) / P(tiếng).
+        match self.ctx {
+            Some(c) => {
+                let case = case_class(&self.keys, self.prev == START, self.prev_caps);
+                p * c.case_ratio(case, lang) * c.join_ratio(self.join, self.prev_lang, lang)
+            }
+            None => p,
+        }
+    }
+
+    fn vn_text(&self) -> String {
+        self.comp.render(self.cfg.modern)
+    }
+
+    pub fn key(&mut self, k: char) -> View {
+        if self.keys.is_empty() {
+            self.last = None;
+            self.join = if self.cfg.join { join_class(&self.run, self.after_word) } else { 0 };
+            if self.join == 0 {
+                self.flush_run();
+            } else {
+                self.run.clear();
+                self.after_word = false;
+            }
+        }
+        self.keys.push(k);
+        self.comp.push(k);
+        let v = self.view();
+        if v.differs() {
+            self.shown = Some(v.lang);
+        }
+        v
+    }
+
+    /// Xoá chữ cuối đang hiện của từ đang gõ. Đang hiện tiếng Việt thì xoá cả các phím tạo ra chữ đó và giữ dấu
+    /// ("tiếng" -> "tiến"); đang hiện phím gốc thì xoá phím cuối. None khi từ đã rỗng.
+    pub fn backspace(&mut self) -> Option<View> {
+        if self.keys.is_empty() {
+            return None;
+        }
+        let v = self.view();
+        let keys = if v.lang == Lang::Vn && v.differs() && !self.comp.undone {
+            self.comp.canonical_keys(1, self.cfg.modern)
+        } else {
+            let mut k = std::mem::take(&mut self.keys);
+            k.pop();
+            k
+        };
+        self.replay(&keys);
+        if self.keys.is_empty() {
+            self.force = None;
+            return None;
+        }
+        let v = self.view();
+        if v.differs() {
+            self.shown = Some(v.lang);
+        }
+        Some(v)
+    }
+
+    fn replay(&mut self, keys: &str) {
+        self.keys.clear();
+        self.comp = Composer::new(self.cfg.telex);
+        self.shown = None;
+        for k in keys.chars() {
+            self.keys.push(k);
+            self.comp.push(k);
+        }
+    }
+
+    /// Mở lại một từ đã nằm trong app (con trỏ ngay sau nó) để gõ tiếp: "tieng" + s -> "tiếng".
+    /// `prev`: từ trước nó (None = đầu câu). false nếu từ có ký tự không gõ được.
+    pub fn reopen(&mut self, word: &str, prev: Option<&str>) -> bool {
+        let Some(keys) = keys_for(word, self.cfg.telex.vni) else { return false };
+        self.run.clear();
+        self.after_word = false;
+        self.join = 0;
+        self.replay(&keys);
+        self.set_prev(prev.map_or(START.into(), |p| if p == START { p.into() } else { canon(p) }));
+        self.last = None;
+        self.force = None;
+        let v = self.view();
+        if v.differs() {
+            self.shown = Some(v.lang);
+        }
+        true
+    }
+
+    /// Ghi nhớ một lần người dùng lật từ không còn trong engine (từ trước con trỏ, hoàn tác lần tự đổi).
+    /// Cả ba ở dạng khoá `canon`.
+    pub fn learn(&mut self, prev: &str, rejected: &str, chosen: &str) {
+        if self.cfg.learn {
+            self.memory.learn(prev, rejected, chosen, self.vn);
+        }
+    }
+
+    /// Huỷ một lần `learn` cùng tham số.
+    pub fn unlearn(&mut self, prev: &str, rejected: &str, chosen: &str) {
+        if self.cfg.learn {
+            self.memory.unlearn(prev, rejected, chosen);
+        }
+    }
+
+    pub fn forget(&mut self) {
+        self.memory = Memory::default();
+    }
+
+    /// Phương án còn lại của một chữ có sẵn trong app, khi không biết phím đã gõ: chữ Latin -> Telex của chính nó
+    /// ("visa" -> "vía"); chữ Việt -> phím Telex, đặt phím dấu thanh ở chỗ cho ra từ Anh có thật ("vía" -> "visa",
+    /// "tét" -> "test"). None nếu không có phương án nào khác.
+    pub fn alternative(&self, word: &str) -> Option<String> {
+        let render = |keys: &str| {
+            let mut c = Composer::new(self.cfg.telex);
+            keys.chars().for_each(|k| c.push(k));
+            c.render(self.cfg.modern)
+        };
+        if word.is_ascii() {
+            let vn = render(word);
+            return (word.chars().all(|c| c.is_ascii_alphabetic()) && vn != word).then_some(vn);
+        }
+        if self.cfg.telex.vni {
+            return None;
+        }
+        let keys = keys_for(word, false)?;
+        let mut cands = vec![keys.clone()];
+        // phím chuẩn để dấu thanh cuối; người gõ từ Anh thì chữ đó nằm giữa (vi-s-a)
+        if let Some(t) = keys.chars().last().filter(|c| "sfrxjSFRXJ".contains(*c)) {
+            let base = &keys[..keys.len() - 1];
+            cands.extend((1..base.len()).map(|i| format!("{}{t}{}", &base[..i], &base[i..])));
+        }
+        let mut best: Option<(f64, String)> = None;
+        for k in cands.into_iter().filter(|k| render(k) == word) {
+            let p = self.en_word(&k.to_ascii_lowercase()).unwrap_or(0.0);
+            if best.as_ref().is_none_or(|b| p > b.0) {
+                best = Some((p, k));
+            }
+        }
+        best.map(|b| b.1)
+    }
+
+    /// Ngữ cảnh (khoá `canon` của từ trước) của từ vừa chốt, để mở lại nó đúng ngữ cảnh.
+    pub fn last_context(&self) -> Option<String> {
+        self.last.as_ref().map(|l| l.prev.clone())
+    }
+
+    /// Ép từ đang gõ sang phương án còn lại (lật trước khi chốt). Lựa chọn được ghi nhớ lúc chốt nếu khác với engine.
+    pub fn toggle_current(&mut self) -> Option<View> {
+        let v = self.view();
+        if self.keys.is_empty() || !v.differs() {
+            return None;
+        }
+        self.force = Some(if v.lang == Lang::Vn { Lang::En } else { Lang::Vn });
+        Some(self.view())
+    }
+
+    pub fn view(&self) -> View {
+        let vn_text = self.vn_text();
+        let (letters, tone) = (self.comp.toneless(), self.comp.tone);
+        let stripped: String = letters.iter().map(|&c| crate::syllable::strip_mark(c)).collect();
+        let penalty = self.order_penalty();
+        let vn_p = self.vn_prefix(&letters, tone).map(|u| {
+            penalty
+                * self.contextual(Lang::Vn, u, |f| {
+                    // một chữ cái chưa mũ/móc: mọi âm tiết cùng dạng không dấu đều còn gõ thành được (a -> ă, â; d -> đ)
+                    if letters.len() == 1 && letters[0].is_ascii() && tone == crate::syllable::Tone::None {
+                        return f.prefix_class_sum(&stripped, crate::context::VN);
+                    }
+                    f.prefix_sum(&stripped, &|w| {
+                        w.vn
+                            && (tone == crate::syllable::Tone::None || w.tone() == tone)
+                            && compatible_prefix(&letters, w.toneless().chars())
+                    })
+                })
+        });
+        let (en_text, en_low, en_u) = self.en_side(|w| self.en_prefix(w), false);
+        // Khoá ASCII chỉ có số thanh ở cuối, nên khoá ASCII trong khoảng tiền tố không dấu luôn bắt đầu bằng `en_low`.
+        let en_p = en_u.map(|u| self.contextual(Lang::En, u, |f| f.prefix_class_sum(&en_low, crate::context::ASCII)));
+        let lang = match (vn_p, en_p) {
+            (Some(_), None) => Lang::Vn,
+            (None, _) => Lang::En,
+            (Some(v), Some(e)) => {
+                let margin = self.cfg.flip_ratio.ln();
+                let d = v.ln() - e.ln();
+                match self.shown {
+                    Some(Lang::Vn) if -d < margin => Lang::Vn,
+                    Some(Lang::En) if d < margin => Lang::En,
+                    _ if d >= 0.0 => Lang::Vn,
+                    _ => Lang::En,
+                }
+            }
+        };
+        let lang = self.force.unwrap_or(lang);
+        let text = if lang == Lang::Vn { vn_text.clone() } else { en_text.clone() };
+        View { text, lang, vn_text, en_text, vn_p, en_p }
+    }
+
+    /// Chốt từ ở ranh giới (space, dấu câu, Enter).
+    pub fn commit(&mut self) -> View {
+        let vn_text = self.vn_text();
+        let vn_key = canon(&vn_text);
+        let vn_p = self.vn_word().map(|u| {
+            self.order_penalty() * self.memory.preference(&vn_key) * self.contextual(Lang::Vn, u, |f| f.count(&vn_key))
+        });
+        let (en_text, _, en_u) = self.en_side(|w| self.en_word(w), true);
+        let en_key = canon(&en_text);
+        let en_p = en_u.map(|u| self.memory.preference(&en_key) * self.contextual(Lang::En, u, |f| f.count(&en_key)));
+        let lang = match (vn_p, en_p) {
+            (Some(v), Some(e)) if v >= e => Lang::Vn,
+            (Some(_), None) => Lang::Vn,
+            _ => Lang::En,
+        };
+        // Chỉ từ nói rõ thứ tiếng mới đổi "tiếng của từ trước".
+        let mut informative = match (vn_p, en_p) {
+            (Some(_), None) | (None, Some(_)) => true,
+            (Some(v), Some(e)) => (v.ln() - e.ln()).abs() > self.cfg.informative_ratio.ln(),
+            (None, None) => false,
+        };
+        let pick = |l: Lang| if l == Lang::Vn { &vn_text } else { &en_text };
+        let lang = match self.force.take() {
+            Some(f) if f != lang && vn_text != en_text => {
+                if self.cfg.learn {
+                    self.memory.learn(&self.prev, &canon(pick(lang)), &canon(pick(f)), self.vn);
+                }
+                informative = true;
+                f
+            }
+            _ => lang,
+        };
+        if informative {
+            self.prev2_lang = self.prev_lang;
+            self.prev_lang = Some(lang);
+            self.recent.push_back(lang);
+            if self.recent.len() > RECENT {
+                self.recent.pop_front();
+            }
+        }
+        let text = if lang == Lang::Vn { vn_text.clone() } else { en_text.clone() };
+        let before = self.set_prev(canon(&text));
+        self.prev_caps = all_caps(&self.keys);
+        self.run.clear();
+        self.after_word = true;
+        self.last = Some(Last { vn_text: vn_text.clone(), en_text: en_text.clone(), lang, prev: before, counted: informative });
+        self.keys.clear();
+        self.comp = Composer::new(self.cfg.telex);
+        self.shown = None;
+        View { text, lang, vn_text, en_text, vn_p, en_p }
+    }
+
+    /// P(từ `next` | từ trước là `cand`), cả hai ở dạng khoá `canon`: dùng từ phía sau để xem lại một từ còn phân vân.
+    /// Gọi ngay sau `commit` của `next`. `cand_lang`: thứ tiếng của `cand`; có thì phần không nhờ cặp từ tính cả xác suất đổi tiếng (từ Việt mà theo sau
+    /// là từ chỉ có tiếng Anh thì đáng ngờ: "Tô subtle" -> "Too subtle").
+    pub fn next_support(&self, cand: &str, cand_lang: Option<Lang>, next: &str) -> f64 {
+        let word = key_to_word(next);
+        let vn = decompose(&word).and_then(|(s, t)| {
+            let s: Vec<char> = s.chars().collect();
+            mix(self.ctx.and_then(|c| c.vn.word_prob(&s, t)), self.vn.word_prob(&s, t), self.mu())
+        });
+        let en = next.is_ascii().then(|| self.en_word(next)).flatten();
+        let (vn, en) = (vn.unwrap_or(0.0), en.unwrap_or(0.0));
+        let base = match (self.ctx, cand_lang) {
+            (Some(c), Some(l)) if self.cfg.lookahead_switch => {
+                let id = c.word_id(cand);
+                let after = |lang| self.lang_after(c, id, Some(l), Some(l), lang);
+                after(Lang::Vn) * vn + after(Lang::En) * en
+            }
+            _ => vn.max(en),
+        }
+        .max(1e-9);
+        let (mut count, mut total, mut types) = (0.0, 0.0, 0.0);
+        if let Some(f) = self.ctx.and_then(|c| c.follow(cand)).filter(|_| self.cfg.bigram) {
+            count += f.count(next);
+            total += f.total();
+            types += f.types();
+        }
+        if let Some(f) = self.memory.follow(cand) {
+            count += PERSONAL * f.count(next);
+            total += PERSONAL * f.total();
+            types += f.types();
+        }
+        let p = if total > 0.0 {
+            let l = total / (total + types);
+            l * count / total + (1.0 - l) * base
+        } else {
+            base
+        };
+        // từ sau dính liền vào (`self.join` là của từ vừa chốt): low-fidelity, Max-SA, Assets.car
+        match (self.ctx, cand_lang) {
+            (Some(c), Some(l)) if self.cfg.join => p * c.join_next_ratio(self.join, l),
+            _ => p,
+        }
+    }
+
+    /// Lật từ vừa chốt sang phương án còn lại ("visa" <-> "vía") và ghi nhớ lựa chọn của người dùng.
+    /// Trả về (chữ cũ, chữ mới) để bộ gõ thay trên màn hình; None nếu không có gì để lật
+    /// (đã gõ sang từ khác, hoặc hai phương án giống nhau như "con"). Lật lần nữa thì quay lại.
+    pub fn flip_last(&mut self) -> Option<(String, String)> {
+        self.toggle_last(true)
+    }
+
+    /// Lật ngược lần `flip_last` vừa rồi và bỏ điều nó vừa học (lật nhầm, trả lại ngay).
+    pub fn unflip_last(&mut self) -> Option<(String, String)> {
+        self.toggle_last(false)
+    }
+
+    fn toggle_last(&mut self, learn: bool) -> Option<(String, String)> {
+        let last = self.last.as_mut()?;
+        if last.vn_text == last.en_text {
+            return None;
+        }
+        let pick = |l: &Last| if l.lang == Lang::Vn { l.vn_text.clone() } else { l.en_text.clone() };
+        let old = pick(last);
+        last.lang = if last.lang == Lang::Vn { Lang::En } else { Lang::Vn };
+        let new = pick(last);
+        let (old_key, new_key) = (canon(&old), canon(&new));
+        if self.cfg.learn {
+            if learn {
+                self.memory.learn(&last.prev, &old_key, &new_key, self.vn);
+            } else {
+                self.memory.unlearn(&last.prev, &new_key, &old_key);
+            }
+        }
+        if self.prev == old_key {
+            self.prev_id = self.ctx.and_then(|c| c.word_id(&new_key));
+            self.prev = new_key;
+        }
+        if last.counted {
+            if let Some(r) = self.recent.back_mut() {
+                *r = last.lang;
+            }
+        } else {
+            self.recent.push_back(last.lang);
+            last.counted = true;
+        }
+        self.prev_lang = Some(last.lang);
+        Some((old, new))
+    }
+
+    /// Ký tự ngăn cách sau từ (gọi sau `commit`, hoặc khi chưa gõ chữ nào). Tiếng của từ trước vẫn giữ
+    /// qua câu mới: người ta hay viết nhiều câu liền bằng một thứ tiếng.
+    pub fn separator(&mut self, c: char) {
+        self.run.push(c);
+        if c.is_whitespace() || !self.cfg.join {
+            self.flush_run();
+        }
+    }
+}

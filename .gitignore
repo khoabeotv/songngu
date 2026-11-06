@@ -1,0 +1,4 @@
+/target
+/corpus
+__pycache__/
+/models/

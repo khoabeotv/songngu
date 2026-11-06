@@ -1,0 +1,24 @@
+Songngu
+
+Mã nguồn: MIT (xem LICENSE).
+
+Thư viện Rust đóng vào bộ gõ:
+- unicode-normalization (https://github.com/unicode-rs/unicode-normalization): MIT hoặc Apache-2.0; bảng dữ liệu
+  Unicode theo Unicode License v3.
+- tinyvec (https://github.com/Lokathor/tinyvec): Zlib, Apache-2.0 hoặc MIT.
+
+Dữ liệu đi kèm (data/):
+- vi_50k.txt: FrequencyWords của Hermit Dave (https://github.com/hermitdave/FrequencyWords), dựng từ
+  OpenSubtitles 2018, CC BY-SA 4.0. en_words.txt là bản lọc của en_50k.txt cùng nguồn, CC BY-SA 4.0.
+- en_dev.txt, vi_extra.txt: của dự án (MIT).
+
+Mô hình ngữ cảnh (model.bin trong mục Releases, đóng vào Songngu.app) phát hành theo CC BY-SA 4.0
+(https://creativecommons.org/licenses/by-sa/4.0/), vì có chứa từ điển FrequencyWords. Đây là bảng đếm từ và cặp từ,
+không chứa văn bản gốc, học từ:
+- FineWeb-2 (https://huggingface.co/datasets/HuggingFaceFW/fineweb-2), vie_Latn, của Hugging Face: ODC-By 1.0,
+  kèm điều khoản sử dụng của Common Crawl.
+- Tài liệu dịch tiếng Việt, CC BY 4.0:
+  - React (https://github.com/reactjs/vi.react.dev), © Meta Platforms, Inc. và cộng đồng dịch;
+  - Vue.js (https://github.com/vuejs-translations/docs-vi), © Evan You và cộng đồng dịch;
+  - Kubernetes (https://github.com/kubernetes/website, content/vi), © The Kubernetes Authors.
+- Chat song ngữ do Claude Haiku 4.5 sinh cho dự án (output thuộc dự án theo điều khoản Anthropic).
