@@ -48,8 +48,11 @@ pub struct Config {
     pub en_bias: f64,
     /// Phạt mỗi thao tác người gõ Telex hiếm làm (xem `order_penalty`).
     pub odd_penalty: f64,
-    /// Phạt mỗi lần đặt mũ/đ muộn (Composer::late). Dev: 0,01 cân giữa từ Anh trùng dạng (theme, Cocos) và người quen gõ dấu sau.
+    /// Phạt mỗi lần đặt mũ muộn (Composer::late). Dev: 0,01 cân giữa từ Anh trùng dạng (theme, Cocos) và người quen gõ dấu sau.
     pub late_penalty: f64,
+    /// Phạt đ đặt bằng d gõ muộn (Composer::late_d). Nhẹ hơn mũ: ít từ Anh trùng dạng, còn "did" cho "đi" là thói quen
+    /// phổ biến. Dev: 0,01/0,03/0,1/0,3/1 cho 351/347/341/340/340 từ sai, cột gõ chuẩn không đổi.
+    pub late_d_penalty: f64,
     /// Từ được tính là "nói rõ thứ tiếng" khi hai phương án chênh nhau hơn nghần này lần.
     pub informative_ratio: f64,
 }
@@ -72,6 +75,7 @@ impl Default for Config {
             en_bias: 1.0,
             odd_penalty: 0.05,
             late_penalty: 0.01,
+            late_d_penalty: 0.3,
             informative_ratio: 10.0,
         }
     }
@@ -264,7 +268,8 @@ impl<'a> Engine<'a> {
     /// P(phím | từ Việt) thô: người gõ Telex hiếm khi đổi dấu thanh giữa chừng hay thêm mũ/móc sau dấu thanh
     /// ("these" -> thế, "CORS" -> CÓ), nên chuỗi phím kiểu đó nghiêng về tiếng Anh.
     fn order_penalty(&self) -> f64 {
-        self.cfg.odd_penalty.powi(self.comp.odd as i32) * self.cfg.late_penalty.powi(self.comp.late as i32)
+        let d = if self.comp.late_d { self.cfg.late_d_penalty } else { 1.0 };
+        self.cfg.odd_penalty.powi(self.comp.odd as i32) * self.cfg.late_penalty.powi(self.comp.late as i32) * d
     }
 
     // ---- ngữ cảnh ----

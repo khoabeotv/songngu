@@ -15,12 +15,12 @@ Từ sai đo qua lớp bộ gõ (`eval-session`; đường thay chữ và xoá l
 | Bộ test | Từ | Từ sai | Gõ như người thật | Sửa-khi-Space | Đổi giữa từ |
 |---|---|---|---|---|---|
 | Kỹ thuật (tài liệu dịch + trang kỹ thuật) | 60k | 0,02% | 0,03% | 0,07% | 0,41% |
-| FineWeb (web đời thường) | 73k | 0,06% | 0,07% | 0,11% | 0,44% |
+| FineWeb (web đời thường) | 73k | 0,06% | 0,06% | 0,11% | 0,44% |
 | Chat (Haiku sinh, chủ đề không có trong phần học) | 51k | 0,11% | 0,14% | 0,27% | 2,25% |
 
 - Bỏ chat khỏi phần học: chat test sai 93 từ thay vì 54 (0,18%), kỹ thuật/FineWeb gần như không đổi (12/44 thay vì 11/42).
 - Gõ nhầm 5% không sửa: các từ còn lại sai 55/14/40 (chat/kỹ thuật/FineWeb), như khi gõ sạch.
-- Gõ dấu muộn đôi khi ra đúng một từ Anh (đi gõ `did`, thêm gõ `theme`, mây gõ `maya`): bộ gõ nghiêng tiếng Anh, Esc để lật. Phần lớn chênh lệch giữa cột gõ chuẩn và gõ như người thật ở chat là do những từ này.
+- Gõ dấu muộn đôi khi ra đúng một từ Anh (thêm gõ `theme`, mây gõ `maya`): bộ gõ nghiêng tiếng Anh, Esc để lật. Đ gõ muộn (`did` cho "đi") để ngữ cảnh quyết. Phần lớn chênh lệch giữa cột gõ chuẩn và gõ như người thật ở chat là do những từ này.
 - Ngữ cảnh học từ cùng nguồn với hai bộ test đầu (khác tài liệu); chat test cùng model sinh và prompt với phần học (khác chủ đề). Các số này lạc quan hơn văn bản thật của người dùng.
 - Lỗi còn lại chủ yếu là từ có nghĩa ở cả hai thứ tiếng (been/bên, its/ít, car/cả), viết tắt trùng âm tiết Việt (ASO/ÁO, HW/HƯ) và lỗi chính tả có sẵn trong văn bản gốc (đuợc, nguời) mà Telex không gõ ra.
 - Người dùng lật ngay từ sai: bộ nhớ riêng giảm số lần phải lật 12% (kỹ thuật dev, 17 -> 15) đến 21% (FineWeb dev, 43 -> 34); dev chat gần như không đổi (21 -> 19, 35 -> 35) (`eval --fix` so với `--no-learn`).

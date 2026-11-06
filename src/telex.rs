@@ -43,8 +43,10 @@ pub struct Composer {
     pub undone: bool,
     /// Số thao tác người gõ Telex hiếm làm: đổi sang dấu thanh khác, thêm mũ/móc sau dấu thanh.
     pub odd: u32,
-    /// Số lần đặt mũ hoặc đ không liền sau chữ của nó (thaya, cana, duod): từ Anh hay ra dạng này (did, theme).
+    /// Số lần đặt mũ không liền sau chữ của nó (thaya, cana): từ Anh hay ra dạng này (theme, maya).
     pub late: u32,
+    /// Đã đặt đ bằng d gõ muộn (duod, did). Phạt riêng: từ Anh trùng dạng rất ít (did, dad, deed).
+    pub late_d: bool,
     /// Phím gốc trừ phím bị huỷ ("verr" -> "ver"): chữ Telex cổ điển hiện ra khi khôi phục.
     literal: Vec<Option<(char, bool)>>,
 }
@@ -295,7 +297,7 @@ impl Composer {
         true
     }
 
-    /// dd: đ cho d đầu âm tiết. Gõ liền thì gõ lại để huỷ; gõ sau nguyên âm (duod) đếm vào `late`.
+    /// dd: đ cho d đầu âm tiết. Gõ liền thì gõ lại để huỷ; gõ sau nguyên âm (duod) đánh dấu `late_d`.
     fn apply_stroke(&mut self, li: usize) -> bool {
         let Some(k) = self.letters.len().checked_sub(1) else { return false };
         match self.letters[k].ch {
@@ -311,7 +313,7 @@ impl Composer {
             _ if self.letters[0].ch == 'd' && self.letters.iter().any(|l| is_vowel(l.ch)) => {
                 self.letters[0].ch = 'đ';
                 self.letters[0].mark_key = Some(li);
-                self.late += 1;
+                self.late_d = true;
                 true
             }
             _ => false,

@@ -5,7 +5,7 @@ Không có chế độ Anh/Việt: mỗi phím chạy song song nhánh Telex và
 ## Engine (`src/`)
 
 - `syllable.rs`: tập âm tiết sinh từ luật ghép vần, đặt dấu thanh kiểu mới/cũ.
-- `telex.rs`: ghép phím (Telex, VNI, `[ ]`), dấu gõ tự do thứ tự, gõ lặp để huỷ. Đếm thao tác người gõ Telex hiếm làm (đổi dấu thanh giữa chừng, thêm mũ/móc sau dấu thanh) và dấu gõ muộn (mũ, đ không liền sau chữ của nó) để phạt nhánh Việt: "these" không thành "thế", "did"/"theme" vẫn là tiếng Anh (`odd_penalty`, `late_penalty`).
+- `telex.rs`: ghép phím (Telex, VNI, `[ ]`), dấu gõ tự do thứ tự, gõ lặp để huỷ. Đếm thao tác người gõ Telex hiếm làm (đổi dấu thanh giữa chừng, thêm mũ/móc sau dấu thanh) và dấu gõ muộn (mũ, đ không liền sau chữ của nó) để phạt nhánh Việt: "these" không thành "thế", "theme" vẫn là tiếng Anh (`odd_penalty`, `late_penalty`). Đ gõ muộn phạt nhẹ hơn (`late_d_penalty`): ít từ Anh trùng dạng, còn gõ "did" cho "đi" là thói quen phổ biến; ngữ cảnh quyết "toi did" -> "tôi đi", "I did it" giữ nguyên.
 - `lexicon.rs`: mảng đã sắp xếp + tần suất cộng dồn, tiền tố = một đoạn liên tiếp, tra không cấp phát; viết tắt có đ (đc, sđt); bigram chữ cái cho từ Anh chưa gặp.
 - `context.rs`: học từ văn bản song ngữ; bảng cặp từ CSR (số hiệu từ xếp theo dạng không dấu, 8 byte mỗi cặp, cờ lớp từ để cộng tiền tố không đọc chuỗi). Trigram đã thử (cắt ≥3/5/10): không đổi từ sai nào trên dev, file nặng thêm 10-21 MB, nên không dùng.
 - `store.rs`: định dạng nhị phân của mô hình, mmap, kiểm biên và UTF-8 một lần lúc nạp.

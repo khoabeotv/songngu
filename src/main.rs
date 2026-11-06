@@ -15,8 +15,9 @@ use songngu::engine::{Config, Engine, Lang, View};
 use songngu::syllable::split_tone;
 use songngu::typing::{scored_words, Habits, Typist, Unit, BS, SKIP};
 
-const VALUE_OPTS: [&str; 23] = [
+const VALUE_OPTS: [&str; 24] = [
     "--late-penalty",
+    "--late-d-penalty",
     "--typos",
     "--seed",
     "--penalty",
@@ -95,6 +96,9 @@ fn main() {
     }
     if let Some(v) = arg(&args, "--late-penalty") {
         cfg.late_penalty = v.parse().unwrap();
+    }
+    if let Some(v) = arg(&args, "--late-d-penalty") {
+        cfg.late_d_penalty = v.parse().unwrap();
     }
     if let Some(v) = arg(&args, "--informative") {
         cfg.informative_ratio = v.parse().unwrap();
