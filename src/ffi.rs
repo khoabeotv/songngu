@@ -60,6 +60,7 @@ impl Handle {
         self.session.logging = s.option("log") && self.log_path.is_some();
         self.session.app = s.app_kind(&self.app);
         self.session.blind = s.tap(&self.app);
+        self.session.backspace_flip = !s.option("esc_flip");
         // Terminal/IDE: chủ yếu gõ lệnh, tên biến tiếng Anh.
         cfg.en_bias = if self.session.app == AppKind::Code { 5.0 } else { 1.0 };
     }
@@ -281,7 +282,7 @@ pub unsafe extern "C" fn sn_forget_memory(h: *mut Handle) {
     }
 }
 
-/// Tuỳ chọn trong menu: "classic_tone", "vni", "brackets", "log"; theo app hiện tại: "exclude" (bỏ qua).
+/// Tuỳ chọn trong menu: "classic_tone", "vni", "brackets", "log", "esc_flip"; theo app hiện tại: "exclude" (bỏ qua).
 /// Chặn phím theo app: `sn_tap_app` / `sn_set_tap_app` (app đang trước mặt, không phải app của bộ gõ).
 ///
 /// # Safety

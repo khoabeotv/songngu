@@ -18,6 +18,14 @@ pub enum Lang {
     En,
 }
 
+fn other(l: Lang) -> Lang {
+    if l == Lang::Vn {
+        Lang::En
+    } else {
+        Lang::Vn
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Config {
     /// hoà/khoẻ/thuỷ (true) hay hòa/khỏe/thủy.
@@ -136,6 +144,10 @@ struct Last {
     prev: String,
     /// Đã được tính vào `recent`.
     counted: bool,
+    /// Thứ tiếng engine tự chọn, và bộ nhớ đang ghi người dùng chọn phương án kia cho từ này. Lật qua lại nhiều lần
+    /// chỉ giữ trạng thái cuối: đang hiện khác `natural` thì học, quay về thì bỏ (không học cả hai chiều).
+    natural: Lang,
+    learned: bool,
 }
 
 /// Mỗi lần người dùng lật từ bằng ngang ngần này lần gặp cặp từ đó trong corpus: một lần sửa đã đủ để lần sau
@@ -474,6 +486,16 @@ impl<'a> Engine<'a> {
         self.last.as_ref().map(|l| l.prev.clone())
     }
 
+    /// Thứ tiếng đang ép cho từ đang gõ (`toggle_current`, `set_force`).
+    pub fn forced(&self) -> Option<Lang> {
+        self.force
+    }
+
+    /// Ép (hoặc bỏ ép) thứ tiếng của từ đang gõ; như `toggle_current`, lựa chọn được ghi nhớ lúc chốt.
+    pub fn set_force(&mut self, lang: Option<Lang>) {
+        self.force = lang;
+    }
+
     /// Ép từ đang gõ sang phương án còn lại (lật trước khi chốt). Lựa chọn được ghi nhớ lúc chốt nếu khác với engine.
     pub fn toggle_current(&mut self) -> Option<View> {
         let v = self.view();
@@ -547,6 +569,7 @@ impl<'a> Engine<'a> {
             (None, None) => false,
         };
         let pick = |l: Lang| if l == Lang::Vn { &vn_text } else { &en_text };
+        let natural = lang;
         let lang = match self.force.take() {
             Some(f) if f != lang && vn_text != en_text => {
                 if self.cfg.learn {
@@ -570,7 +593,9 @@ impl<'a> Engine<'a> {
         self.prev_caps = all_caps(&self.keys);
         self.run.clear();
         self.after_word = true;
-        self.last = Some(Last { vn_text: vn_text.clone(), en_text: en_text.clone(), lang, prev: before, counted: informative });
+        let learned = lang != natural && self.cfg.learn;
+        self.last =
+            Some(Last { vn_text: vn_text.clone(), en_text: en_text.clone(), lang, prev: before, counted: informative, natural, learned });
         self.keys.clear();
         self.comp = Composer::new(self.cfg.telex);
         self.shown = None;
@@ -625,30 +650,33 @@ impl<'a> Engine<'a> {
     /// Trả về (chữ cũ, chữ mới) để bộ gõ thay trên màn hình; None nếu không có gì để lật
     /// (đã gõ sang từ khác, hoặc hai phương án giống nhau như "con"). Lật lần nữa thì quay lại.
     pub fn flip_last(&mut self) -> Option<(String, String)> {
-        self.toggle_last(true)
+        self.toggle_last()
     }
 
     /// Lật ngược lần `flip_last` vừa rồi và bỏ điều nó vừa học (lật nhầm, trả lại ngay).
     pub fn unflip_last(&mut self) -> Option<(String, String)> {
-        self.toggle_last(false)
+        self.toggle_last()
     }
 
-    fn toggle_last(&mut self, learn: bool) -> Option<(String, String)> {
+    fn toggle_last(&mut self) -> Option<(String, String)> {
         let last = self.last.as_mut()?;
         if last.vn_text == last.en_text {
             return None;
         }
-        let pick = |l: &Last| if l.lang == Lang::Vn { l.vn_text.clone() } else { l.en_text.clone() };
-        let old = pick(last);
+        let text = |l: &Last, lang: Lang| if lang == Lang::Vn { l.vn_text.clone() } else { l.en_text.clone() };
+        let old = text(last, last.lang);
         last.lang = if last.lang == Lang::Vn { Lang::En } else { Lang::Vn };
-        let new = pick(last);
+        let new = text(last, last.lang);
         let (old_key, new_key) = (canon(&old), canon(&new));
-        if self.cfg.learn {
-            if learn {
-                self.memory.learn(&last.prev, &old_key, &new_key, self.vn);
+        let chosen = last.lang != last.natural;
+        if self.cfg.learn && chosen != last.learned {
+            let (nat, alt) = (canon(&text(last, last.natural)), canon(&text(last, other(last.natural))));
+            if chosen {
+                self.memory.learn(&last.prev, &nat, &alt, self.vn);
             } else {
-                self.memory.unlearn(&last.prev, &new_key, &old_key);
+                self.memory.unlearn(&last.prev, &nat, &alt);
             }
+            last.learned = chosen;
         }
         if self.prev == old_key {
             self.prev_id = self.ctx.and_then(|c| c.word_id(&new_key));

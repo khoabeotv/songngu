@@ -1,6 +1,6 @@
 # Songngu
 
-Bộ gõ song ngữ Việt/Anh cho macOS, không có chế độ Anh/Việt: cứ gõ Telex, bộ gõ tự hiểu từ nào là tiếng Việt, từ nào là tiếng Anh ngay lúc gõ ("truowfng merge test cos" -> "trường merge test có"). Đoán sai thì bấm Esc để lật.
+Bộ gõ song ngữ Việt/Anh cho macOS, không có chế độ Anh/Việt: cứ gõ Telex, bộ gõ tự hiểu từ nào là tiếng Việt, từ nào là tiếng Anh ngay lúc gõ ("truowfng merge test cos" -> "trường merge test có"). Đoán sai thì bấm Backspace ngay sau từ đó để lật.
 
 ## Cài đặt
 
@@ -30,16 +30,18 @@ Cần macOS 12 trở lên, Xcode Command Line Tools (`xcode-select --install`) v
 
 **Lật Anh/Việt** khi bộ gõ đoán sai:
 
-| Phím | Ở đâu | Lật gì |
-|---|---|---|
-| **Esc** | App thường (Slack, Chrome, Zalo...) | Từ đang gõ, từ vừa gõ xong (kể cả sau dấu cách/dấu câu), lần bộ gõ vừa tự sửa từ trước |
-| **Ctrl+Esc** (hoặc Shift+Esc) | Mọi app; trong terminal/IDE chỉ có phím này | Như Esc, thêm từ bất kỳ ngay trước con trỏ (click quay lại sau từ rồi bấm) |
+| Phím | Lật gì |
+|---|---|
+| **Backspace** ngay sau từ (sau dấu cách hoặc dấu câu vừa gõ) | Từ vừa gõ, nếu cả hai phương án đều là từ có thật (`did`/đi, `theme`/thêm, `visa`/vía); hoặc lần bộ gõ vừa tự sửa từ trước. Từ khác thì Backspace xoá như thường |
+| **Ctrl+Esc** (hoặc Shift+Esc), mọi app | Từ đang gõ dở, từ vừa gõ, hoặc từ bất kỳ ngay trước con trỏ (click quay lại sau từ rồi bấm; không dùng được ở terminal và app không cho bộ gõ đọc chữ như Zalo) |
 
-- Không có gì để lật (từ không có phương án khác, đã bấm Enter hay click) thì Esc đi thẳng vào app.
-- Định bấm Esc cho app (đóng hộp thoại, huỷ sửa tin nhắn) mà bộ gõ lại lật chữ: bấm **Esc thêm lần nữa trong 1 giây**, chữ trả lại như cũ và app nhận Esc đó.
-- Mỗi lần lật, bộ gõ ghi nhớ lựa chọn theo ngữ cảnh, lần sau tự đúng.
+- Ví dụ: gõ `did ` ra "did ", bấm Backspace thành "đi ", gõ tiếp.
+- Định xoá mà bộ gõ lại lật: bấm **Backspace lần nữa ngay**, chữ trả lại như cũ và dấu cách bị xoá. Giữ Backspace để xoá cả đoạn vẫn xoá đúng.
+- Esc trơn luôn là của app (đóng hộp thoại, huỷ sửa tin nhắn). Muốn lật bằng Esc thay cho Backspace: menu SN > "Lật Anh/Việt bằng Esc thay cho Backspace". Khi đó Esc lật từ đang gõ và từ vừa gõ ở app thường, bấm Esc lần nữa ngay để trả lại.
+- **Xoá cả từ rồi gõ lại đúng như cũ** cũng là lật: gõ `visa` ra "visa", xoá hết rồi gõ `visa` lần nữa thì ra "vía" (chỉ với từ mà cả hai phương án đều là từ có thật, như cách lật bằng Backspace).
+- Mỗi lần lật, bộ gõ ghi nhớ lựa chọn theo ngữ cảnh: cùng cụm từ thì lần sau tự đúng; ở chỗ khác, mỗi lần lật làm cán cân nghiêng thêm (1 lần ×4, 2 lần ×9).
 
-**Tự sửa từ trước**: bộ gõ có thể đổi lại từ vừa gõ khi thấy từ sau ("xin visa may" -> "xin vía may"). Không muốn thì bấm Esc ngay lúc đó để hoàn tác.
+**Tự sửa từ trước**: bộ gõ có thể đổi lại từ vừa gõ khi thấy từ sau ("xin visa may" -> "xin vía may"). Không muốn thì bấm Backspace ngay lúc đó để hoàn tác.
 
 **Menu SN** trên thanh menu:
 
@@ -50,6 +52,7 @@ Cần macOS 12 trở lên, Xcode Command Line Tools (`xcode-select --install`) v
 | Đặt dấu kiểu cũ | hòa, thủy thay vì hoà, thuỷ |
 | Gõ VNI | Phím số làm dấu |
 | `[ ]` gõ ơ ư | `[` = ơ, `]` = ư |
+| Lật Anh/Việt bằng Esc thay cho Backspace | Backspace chỉ còn là xoá; Esc lật ở app thường |
 | Ghi nhật ký gõ | Ghi phím và chữ ra `typing-log.tsv` trên máy này (để báo lỗi), không ghi trong ô mật khẩu |
 | Quên những gì đã học | Xoá bộ nhớ lật; file cũ giữ ở `memory-forgotten.tsv` |
 

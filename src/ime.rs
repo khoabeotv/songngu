@@ -18,9 +18,12 @@
 //!
 //! Lật Anh/Việt, theo thứ tự: từ đang gõ; lần từ sau vừa tự đổi từ trước (hoàn tác); từ vừa gõ; từ ngay trước
 //! con trỏ (click quay lại rồi bấm, chỉ đường thay chữ).
-//! - Esc (app thường): lật chữ bộ gõ vừa đưa vào; từ trước con trỏ chỉ khi lúc gõ bộ gõ còn phân vân. Không có gì
-//!   để lật thì Esc là của app (huỷ sửa tin nhắn, đóng hộp thoại). Lỡ lật khi định dùng Esc cho app thì Esc thêm lần
-//!   nữa ngay (`esc_undo_window`): chữ trả lại như cũ và app nhận Esc đó.
+//! - Backspace (mặc định, `backspace_flip`): bấm ngay sau một từ (có thể cách vài dấu ngăn cách) lật lần vừa tự đổi,
+//!   hoặc từ vừa gõ mà hai phương án đều đáng kể (did/đi, theme/thêm). Còn lại Backspace xoá như thường. Esc trơn là của app.
+//! - Esc (tắt `backspace_flip`, app thường): lật chữ bộ gõ vừa đưa vào; từ trước con trỏ chỉ khi lúc gõ bộ gõ còn phân
+//!   vân. Không có gì để lật thì Esc là của app (huỷ sửa tin nhắn, đóng hộp thoại).
+//! - Lỡ lật khi định dùng phím đó cho app (xoá, đóng hộp thoại) thì bấm lại ngay (`esc_undo_window`): chữ trả lại như cũ và
+//!   app nhận phím đó. Giữ Backspace để xoá cả đoạn vẫn xoá đúng.
 //! - Ctrl+Esc / Shift+Esc (`Flip`, mọi app; terminal/IDE chỉ có cách này vì Esc là của app): lật cả chữ bộ gõ không gõ ra.
 
 use std::collections::VecDeque;
@@ -85,6 +88,24 @@ struct Tail {
     seps: String,
     /// (phương án kia, P đã chọn, P phương án kia, thứ tiếng đã chọn) nếu từ sau còn có thể đổi lại nó (`doubtful`).
     doubt: Option<(String, f64, f64, Lang)>,
+    /// Hai phương án đều đáng kể (`uncertain`) hoặc người dùng đã lật nó: Backspace lật được (`backspace_flip`).
+    unsure: bool,
+    /// Phương án còn lại (để xoá cả từ rồi gõ lại thì ra nó, xem `Retype`).
+    alt: Option<String>,
+}
+
+/// Từ vừa bị xoá hết mà hai phương án đều đáng kể: gõ lại đúng nó thì ra phương án kia (người ta xoá rồi gõ lại khi
+/// thấy sai). Chỉ áp cho từ gõ ngay sau đó, ở đúng chỗ đó.
+#[derive(Clone)]
+struct Retype {
+    shown: String,
+    alt: String,
+}
+
+/// Đang xoá dần một từ đã chốt (đã xoá hết dấu ngăn cách sau nó): còn `left` chữ nữa là hết từ.
+struct Deleting {
+    retype: Retype,
+    left: usize,
 }
 
 /// Một từ bộ gõ đã đưa vào app, để Esc sửa được cả khi con trỏ quay lại sau nó: biết đúng phương án còn lại
@@ -103,6 +124,8 @@ const HISTORY: usize = 64;
 /// Lần Esc (không Shift) vừa lật, để Esc tiếp ngay sau đó trả lại.
 struct EscUndo {
     at: Instant,
+    /// Phím đã lật (Esc hoặc Backspace): bấm lại chính phím này ngay sau đó thì trả lại.
+    key: Event,
     kind: EscKind,
 }
 
@@ -113,6 +136,17 @@ enum EscKind {
     Tail,
     /// Chữ trong app: `now` (ngay trước `after`) đổi lại thành `back`, bỏ `learned` = (trước, bỏ, chọn).
     Text { now: String, back: String, after: String, learned: (String, String, String) },
+}
+
+/// Phím lật nào: mỗi phím lật tới đâu (xem `flip_inner`).
+#[derive(Clone, Copy, PartialEq)]
+enum Reach {
+    /// Ctrl/Shift+Esc: mọi thứ, kể cả chữ bộ gõ không gõ ra.
+    Any,
+    /// Esc: chữ bộ gõ vừa đưa vào; từ trước con trỏ chỉ khi lúc gõ còn phân vân.
+    Esc,
+    /// Backspace ngay sau một từ: lần vừa tự đổi, hoặc từ vừa gõ mà hai phương án đều đáng kể.
+    Backspace,
 }
 
 /// Lần từ sau vừa tự đổi từ trước: Esc ngay sau đó hoàn tác.
@@ -170,6 +204,16 @@ pub struct Session<'a> {
     esc_undo: Option<EscUndo>,
     /// Esc trong khoảng này sau một lần Esc lật thì trả lại và chuyển Esc cho app.
     pub esc_undo_window: Duration,
+    /// Backspace ngay sau một từ lật nó (mặc định), Esc trơn là của app. Tắt: Esc lật như cũ ở app thường.
+    pub backspace_flip: bool,
+    /// Gõ lại từ vừa xoá: ra phương án kia (`Retype`). `del_from`: từ đang gõ lúc bắt đầu xoá nó; `deleting`: đang xoá
+    /// từ đã chốt; `retype_forced`: đã ép từ đang gõ theo `retype` (bỏ ép nếu gõ khác đi).
+    retype: Option<Retype>,
+    /// Phím vừa rồi là dấu ngăn cách sau một từ: chỉ Backspace đầu tiên sau đó mới lật (giữ Backspace thì chỉ xoá).
+    bs_ready: bool,
+    del_from: Option<Retype>,
+    deleting: Option<Deleting>,
+    retype_forced: bool,
 }
 
 fn utf16(s: &str) -> usize {
@@ -241,6 +285,12 @@ impl<'a> Session<'a> {
             auto_flip: None,
             esc_undo: None,
             esc_undo_window: Duration::from_millis(1000),
+            backspace_flip: true,
+            retype: None,
+            bs_ready: false,
+            del_from: None,
+            deleting: None,
+            retype_forced: false,
         }
     }
 
@@ -321,7 +371,15 @@ impl<'a> Session<'a> {
         self.auto_flip = None;
         self.shown.clear();
         self.tail = None;
+        self.forget_retype();
         self.eng.separator('\n');
+    }
+
+    fn forget_retype(&mut self) {
+        self.retype = None;
+        self.del_from = None;
+        self.deleting = None;
+        self.retype_forced = false;
     }
 
     fn word_key(&self, c: char) -> bool {
@@ -372,6 +430,7 @@ impl<'a> Session<'a> {
 
     /// Chốt từ đang gõ (chữ cuối cùng có thể khác chữ đang hiện), có thể đổi từ trước còn phân vân.
     fn commit_word(&mut self, a: &mut Action) {
+        self.forget_retype();
         let v = self.eng.commit();
         self.auto_flip = None;
         let next = canon(&v.text);
@@ -400,7 +459,9 @@ impl<'a> Session<'a> {
         self.committed(&v);
         self.shown.clear();
         let doubt = if self.doubtful(&v) { doubt_of(&v) } else { None };
-        self.tail = Some(Tail { word: v.text.clone(), seps: String::new(), doubt });
+        let unsure = self.uncertain(&v);
+        let alt = v.differs().then(|| if v.lang == Lang::Vn { v.en_text.clone() } else { v.vn_text.clone() });
+        self.tail = Some(Tail { word: v.text.clone(), seps: String::new(), doubt, unsure, alt });
     }
 
     /// `before`: chữ ngay trước con trỏ trong app (None nếu app không cho đọc, hoặc đường xoá lùi). Cần ở đầu từ
@@ -409,6 +470,7 @@ impl<'a> Session<'a> {
         let mut a = Action::default();
         // chỉ Esc ngay sau (không phím nào xen giữa) mới trả lại được
         let esc_undo = self.esc_undo.take();
+        let bs_ready = std::mem::take(&mut self.bs_ready);
         if self.app == AppKind::Excluded {
             self.commit_all();
             a.pass = true;
@@ -427,10 +489,15 @@ impl<'a> Session<'a> {
             }
         }
         self.rewrote = false;
-        if let Some(u) = esc_undo.filter(|u| ev == Event::Escape && u.at.elapsed() <= self.esc_undo_window) {
-            // Esc vừa rồi là của app, không phải để lật: trả lại chữ, chốt hết, đưa Esc này cho app
+        if let Some(u) = esc_undo.filter(|u| ev == u.key && u.at.elapsed() <= self.esc_undo_window) {
+            // phím lật vừa rồi là ý dùng cho app: trả lại chữ, rồi để app xử lý phím này
             self.revert_esc(&mut a, u.kind, before);
-            self.commit_all();
+            if ev == Event::Backspace {
+                self.backspace(&mut a);
+                self.expected = self.track();
+            } else {
+                self.commit_all();
+            }
             a.pass = true;
             return a;
         }
@@ -440,6 +507,7 @@ impl<'a> Session<'a> {
                 if !self.eng.is_empty() {
                     self.commit_word(&mut a);
                 }
+                self.forget_retype();
                 self.eng.separator(c);
                 a.commit.push(c);
                 if let Some(t) = self.tail.as_mut() {
@@ -452,9 +520,16 @@ impl<'a> Session<'a> {
                 if self.tail.as_ref().is_some_and(|t| t.seps.chars().count() > 4) {
                     self.tail = None;
                 }
+                self.bs_ready = true;
+            }
+            Event::Backspace if self.backspace_flip && bs_ready && self.eng.is_empty() => {
+                match self.flip_inner(&mut a, before, Reach::Backspace) {
+                    Some(k) => self.esc_undo = Some(EscUndo { at: Instant::now(), key: ev, kind: k }),
+                    None => self.backspace(&mut a),
+                }
             }
             Event::Backspace => self.backspace(&mut a),
-            Event::Escape if self.app == AppKind::Code => self.finish(&mut a),
+            Event::Escape if self.app == AppKind::Code || self.backspace_flip => self.finish(&mut a),
             Event::Escape => self.flip(&mut a, before, false),
             Event::Flip => self.flip(&mut a, before, true),
             Event::Other => self.finish(&mut a),
@@ -480,16 +555,43 @@ impl<'a> Session<'a> {
                 self.tail = None;
             }
         }
+        self.del_from = None;
+        self.deleting = None;
         self.keys.push(c);
-        let v = self.eng.key(c);
+        let mut v = self.eng.key(c);
+        if let Some(r) = self.retype.clone() {
+            // gõ lại đúng từ vừa xoá: ra phương án kia; gõ khác đi thì thôi
+            if self.retype_forced {
+                self.eng.set_force(None);
+                self.retype_forced = false;
+            }
+            let n = self.eng.view();
+            let alt = if n.lang == Lang::Vn { &n.en_text } else { &n.vn_text };
+            if self.eng.forced().is_none() && n.differs() && n.text == r.shown && *alt == r.alt {
+                self.eng.set_force(Some(other(n.lang)));
+                self.retype_forced = true;
+            }
+            v = self.eng.view();
+        }
         self.show(a, v.text);
     }
 
     fn backspace(&mut self, a: &mut Action) {
         self.auto_flip = None;
         if !self.eng.is_empty() {
+            if self.del_from.is_none() {
+                let v = self.eng.view();
+                self.del_from = self.uncertain(&v).then(|| Retype {
+                    alt: if v.lang == Lang::Vn { v.en_text.clone() } else { v.vn_text.clone() },
+                    shown: v.text,
+                });
+            }
             self.keys.pop();
             let text = self.eng.backspace().map(|v| v.text).unwrap_or_default();
+            if self.eng.is_empty() {
+                self.retype = self.del_from.take();
+                self.retype_forced = false;
+            }
             // chỉ mất chữ cuối: để app tự xoá bằng chính phím Backspace này
             if text.chars().count() + 1 == self.shown.chars().count() && self.shown.starts_with(&text) {
                 self.shown = text;
@@ -498,11 +600,25 @@ impl<'a> Session<'a> {
                 self.show(a, text);
             }
         } else {
-            match self.tail.as_mut() {
-                Some(t) if !t.seps.is_empty() => {
+            match self.tail.take() {
+                Some(mut t) if !t.seps.is_empty() => {
                     t.seps.pop();
+                    self.tail = Some(t);
                 }
-                _ => self.tail = None,
+                // xoá vào chính từ vừa gõ: đếm để biết lúc xoá hết
+                Some(t) => {
+                    self.deleting = t.alt.filter(|_| t.unsure).map(|alt| Deleting {
+                        left: t.word.chars().count(),
+                        retype: Retype { shown: t.word, alt },
+                    });
+                }
+                None => {}
+            }
+            if let Some(d) = self.deleting.as_mut() {
+                d.left -= 1;
+                if d.left == 0 {
+                    self.retype = self.deleting.take().map(|d| d.retype);
+                }
             }
             a.pass = true;
         }
@@ -511,15 +627,15 @@ impl<'a> Session<'a> {
     /// `any`: Ctrl/Shift+Esc, lật mọi thứ lật được, kể cả chữ bộ gõ không gõ ra. Esc lật chữ bộ gõ vừa đưa vào (xem đầu
     /// file); không có gì thì Esc là của app. Lật bằng Esc thì ghi lại để Esc tiếp ngay sau đó trả lại (`esc_undo`).
     fn flip(&mut self, a: &mut Action, before: Option<&str>, any: bool) {
-        let kind = self.flip_inner(a, before, any);
-        match kind {
-            Some(k) if !any => self.esc_undo = Some(EscUndo { at: Instant::now(), kind: k }),
+        let reach = if any { Reach::Any } else { Reach::Esc };
+        match self.flip_inner(a, before, reach) {
+            Some(k) if !any => self.esc_undo = Some(EscUndo { at: Instant::now(), key: Event::Escape, kind: k }),
             Some(_) => {}
             None => self.finish(a),
         }
     }
 
-    fn flip_inner(&mut self, a: &mut Action, before: Option<&str>, any: bool) -> Option<EscKind> {
+    fn flip_inner(&mut self, a: &mut Action, before: Option<&str>, reach: Reach) -> Option<EscKind> {
         if !self.eng.is_empty() {
             // không có phương án khác ("ok"): Esc là của app
             if !self.eng.view().differs() {
@@ -537,7 +653,11 @@ impl<'a> Session<'a> {
             }
         }
         if let Some(t) = self.tail.take() {
-            if self.before_ends_with(before, &format!("{}{}", t.word, t.seps)) {
+            // Backspace còn là phím xoá: chỉ lật từ mà hai phương án đều đáng kể (did/đi, theme/thêm), không lật
+            // "tiêng"/"tieeng" (xoá dấu cách để gõ tiếp dấu vào từ)
+            // đã xoá hết dấu ngăn cách thì Backspace tiếp là xoá chữ của từ
+            let fits = reach != Reach::Backspace || (t.unsure && !t.seps.is_empty());
+            if fits && self.before_ends_with(before, &format!("{}{}", t.word, t.seps)) {
                 if self.flip_tail(a, t, true) {
                     return Some(EscKind::Tail);
                 }
@@ -545,7 +665,10 @@ impl<'a> Session<'a> {
             }
             self.tail = Some(t);
         }
-        before.filter(|_| !self.blind).and_then(|b| self.flip_before(a, b, any))
+        if reach == Reach::Backspace {
+            return None;
+        }
+        before.filter(|_| !self.blind).and_then(|b| self.flip_before(a, b, reach == Reach::Any))
     }
 
     fn toggle_current(&mut self, a: &mut Action) {
@@ -566,7 +689,7 @@ impl<'a> Session<'a> {
         a.commit = format!("{new}{}", t.seps);
         self.rewrote = true;
         // người dùng đã chọn: từ sau không tự đổi lại nữa, nhưng Esc vẫn lật lại được
-        self.tail = Some(Tail { word: new.clone(), seps: t.seps, doubt: None });
+        self.tail = Some(Tail { word: new.clone(), seps: t.seps, doubt: None, unsure: true, alt: Some(old.clone()) });
         self.memory_dirty = true;
         self.swapped(&old, &new);
         self.log_flip(&old, &new);
@@ -661,6 +784,7 @@ impl<'a> Session<'a> {
         self.shown.clear();
         self.expected = None;
         self.tail = None;
+        self.forget_retype();
         self.eng.separator('\n');
     }
 }

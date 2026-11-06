@@ -186,7 +186,8 @@ static void apply(SnAction a, id sender) {
     tap.state = (gEngine && front && sn_tap_app(gEngine, front.UTF8String)) ? NSControlStateValueOn : NSControlStateValueOff;
     NSArray *items = @[
         @[ @"Bỏ qua app này", @"exclude" ], tap, @[ @"Đặt dấu kiểu cũ (hòa, thủy)", @"classic_tone" ], @[ @"Gõ VNI", @"vni" ],
-        @[ @"[ ] gõ ơ ư", @"brackets" ], @[ @"Ghi nhật ký gõ (chỉ trên máy này)", @"log" ]
+        @[ @"[ ] gõ ơ ư", @"brackets" ], @[ @"Lật Anh/Việt bằng Esc thay cho Backspace", @"esc_flip" ],
+        @[ @"Ghi nhật ký gõ (chỉ trên máy này)", @"log" ]
     ];
     for (id it in items) {
         if ([it isKindOfClass:[NSMenuItem class]]) {

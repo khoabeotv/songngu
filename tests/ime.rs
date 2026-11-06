@@ -26,6 +26,12 @@ fn blind() -> Session<'static> {
     s
 }
 
+/// Lật bằng Esc thay cho Backspace (tuỳ chọn "esc_flip").
+fn esc(mut s: Session<'static>) -> Session<'static> {
+    s.backspace_flip = false;
+    s
+}
+
 /// Ngữ cảnh nhỏ: "xin visa" hay gặp, nhưng "may" chỉ đi sau "vía". Câu đệm để "may" không phổ biến quá mức.
 fn ctx() -> &'static Context {
     static C: OnceLock<Context> = OnceLock::new();
@@ -146,7 +152,7 @@ fn shift_escape_flips_the_current_and_the_last_word() {
 
 #[test]
 fn escape_flips_what_was_just_typed_even_when_sure() {
-    for mut s in [session(), blind()] {
+    for mut s in [esc(session()), esc(blind())] {
         let mut app = App::default();
         app.run(&mut s, "truowfng ~");
         assert_eq!(app.doc, "truowfng ");
@@ -159,7 +165,7 @@ fn escape_flips_what_was_just_typed_even_when_sure() {
 
 #[test]
 fn escape_with_nothing_to_flip_belongs_to_the_app() {
-    for mut s in [session(), blind()] {
+    for mut s in [esc(session()), esc(blind()), session()] {
         let mut app = App::default();
         // không có phương án khác, hoặc đã qua phím khác (Enter): Esc của app
         app.run(&mut s, "ok~");
@@ -171,7 +177,7 @@ fn escape_with_nothing_to_flip_belongs_to_the_app() {
 
 #[test]
 fn second_escape_right_after_a_flip_undoes_it_and_reaches_the_app() {
-    for mut s in [session(), blind()] {
+    for mut s in [esc(session()), esc(blind())] {
         let mut app = App::default();
         // không ngữ cảnh, "visa" sau "xin" hai bên sát nhau: Esc lật
         app.run(&mut s, "xin visa ~");
@@ -206,6 +212,7 @@ fn escape_undoes_an_automatic_change_of_the_previous_word() {
     let fresh = |blind: bool| {
         let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx()));
         s.blind = blind;
+        s.backspace_flip = false;
         s.unsure_ratio = 1e30; // mọi từ có hai phương án đều tính là còn phân vân
         s
     };
@@ -250,6 +257,23 @@ fn excluded_apps_get_raw_keys() {
 }
 
 #[test]
+fn flipping_a_word_back_and_forth_leaves_only_the_final_choice() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        app.run(&mut s, "xin visa ^");
+        assert!(!s.eng.memory().is_empty());
+        // lật ngược lại: về lựa chọn ban đầu của bộ gõ, không còn gì để nhớ
+        app.run(&mut s, "^");
+        assert!(s.eng.memory().is_empty());
+        app.run(&mut s, "^^^");
+        let once = s.eng.memory().save();
+        let mut s2 = session();
+        App::default().run(&mut s2, "xin visa ^");
+        assert_eq!(once, s2.eng.memory().save());
+    }
+}
+
+#[test]
 fn forget_clears_what_was_learned() {
     let mut s = session();
     let mut app = App::default();
@@ -257,6 +281,116 @@ fn forget_clears_what_was_learned() {
     assert!(!s.eng.memory().is_empty());
     s.forget();
     assert!(s.eng.memory().is_empty());
+}
+
+#[test]
+fn backspace_right_after_a_doubtful_word_flips_it() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        // "visa" sau "xin", không ngữ cảnh: hai phương án sát nhau
+        app.run(&mut s, "xin visa <");
+        assert_eq!(app.doc, "xin visa ");
+        assert!(app.passed.is_empty());
+        assert!(!s.eng.memory().is_empty());
+        // Esc trơn là của app
+        app.run(&mut s, "~");
+        assert_eq!(app.passed, vec!['~']);
+    }
+}
+
+#[test]
+fn second_backspace_right_after_a_flip_gives_it_back_and_deletes() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        // giữ Backspace để xoá: chữ không bị lật, chỉ bị xoá
+        app.run(&mut s, "xin visa <<<");
+        assert_eq!(app.doc, "xin ví");
+        assert!(s.eng.memory().is_empty());
+    }
+}
+
+#[test]
+fn holding_backspace_flips_at_most_once() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        app.run(&mut s, "xin visa, ");
+        let shown = app.doc["xin ".len()..app.doc.len() - 2].to_string();
+        let mut seen = Vec::new();
+        for _ in 0..3 {
+            app.run(&mut s, "<");
+            seen.push(app.doc.clone());
+        }
+        // lật, trả lại + xoá dấu cách, xoá dấu phẩy: không lật lại lần nào nữa
+        assert_eq!(seen[1], format!("xin {shown},"));
+        assert_eq!(seen[2], format!("xin {shown}"));
+        assert!(s.eng.memory().is_empty());
+    }
+}
+
+#[test]
+fn backspace_deletes_after_a_sure_word() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        // "tiêng"/"tieeng": chỉ một phương án đáng kể, Backspace xoá dấu cách để gõ tiếp dấu
+        app.run(&mut s, "tieeng <");
+        assert_eq!(app.doc, "tiêng");
+        assert_eq!(app.passed, vec!['<']);
+    }
+}
+
+fn other_of_visa(w: &str) -> &'static str {
+    if w == "visa" {
+        "vía"
+    } else {
+        "visa"
+    }
+}
+
+#[test]
+fn deleting_a_doubtful_word_and_typing_it_again_gives_the_other_one() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        app.run(&mut s, "xin visa");
+        let shown = app.doc["xin ".len()..].to_string();
+        // đang gõ dở: xoá hết rồi gõ lại đúng các phím đó
+        app.run(&mut s, &"<".repeat(shown.chars().count()));
+        assert_eq!(app.doc, "xin ");
+        app.run(&mut s, "visa");
+        assert_eq!(app.doc, format!("xin {}", other_of_visa(&shown)));
+    }
+    // gõ tiếp khác đi thì thôi: như chưa từng xoá
+    let mut s = session();
+    let mut app = App::default();
+    app.run(&mut s, "xin visa");
+    let n = app.doc["xin ".len()..].chars().count();
+    app.run(&mut s, &"<".repeat(n));
+    app.run(&mut s, "visas");
+    let mut fresh = App::default();
+    fresh.run(&mut session(), "xin visas");
+    assert_eq!(app.doc, fresh.doc);
+}
+
+#[test]
+fn deleting_a_finished_doubtful_word_and_typing_it_again_gives_the_other_one() {
+    for mut s in [esc(session()), esc(blind())] {
+        let mut app = App::default();
+        app.run(&mut s, "xin visa ");
+        let shown = app.doc["xin ".len()..app.doc.len() - 1].to_string();
+        app.run(&mut s, &"<".repeat(shown.chars().count() + 1));
+        assert_eq!(app.doc, "xin ");
+        app.run(&mut s, "visa ");
+        assert_eq!(app.doc, format!("xin {} ", other_of_visa(&shown)));
+        assert!(!s.eng.memory().is_empty());
+    }
+}
+
+#[test]
+fn retyping_a_sure_word_keeps_it() {
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        app.run(&mut s, "khoong<<<<<khoong ");
+        assert_eq!(app.doc, "không ");
+    }
 }
 
 // ---- đường thay chữ: đọc chữ trong app ----
@@ -314,7 +448,7 @@ fn typing_right_after_a_word_reopens_it() {
 
 #[test]
 fn escape_fixes_an_earlier_word_after_the_cursor_goes_back_behind_it() {
-    let mut s = session();
+    let mut s = esc(session());
     let mut app = App::default();
     app.run(&mut s, "xin visa may mawns ");
     assert_eq!(app.doc, "xin vía may mắn ");
@@ -330,7 +464,7 @@ fn escape_fixes_an_earlier_word_after_the_cursor_goes_back_behind_it() {
 
 #[test]
 fn escape_leaves_text_typed_elsewhere_alone_but_shift_escape_flips_it() {
-    let mut s = session();
+    let mut s = esc(session());
     let mut app = App { doc: "hôm nay tét".into(), ..Default::default() };
     app.run(&mut s, "~");
     assert_eq!(app.doc, "hôm nay tét");

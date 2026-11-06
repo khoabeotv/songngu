@@ -3,7 +3,7 @@
 //!   code<TAB>bundle id         thêm app kiểu Terminal/IDE (Esc của app, nghiêng tiếng Anh)
 //!   tap<TAB>bundle id          app không thay chữ được hoặc không đưa phím qua bộ gõ (tự ghi khi kiểm tra thất bại, hoặc
 //!                              chọn trong menu): chặn phím và xoá bằng Backspace. Dòng `marked` của bản cũ đọc như `tap`.
-//!   option<TAB>tên<TAB>0|1     classic_tone, vni, brackets, log
+//!   option<TAB>tên<TAB>0|1     classic_tone, vni, brackets, log, esc_flip (lật bằng Esc thay cho Backspace)
 
 use std::collections::BTreeSet;
 
@@ -43,7 +43,7 @@ const TAP_APPS: &[&str] = &[
     "co.zeit.hyper",
 ];
 
-pub const OPTIONS: [&str; 4] = ["classic_tone", "vni", "brackets", "log"];
+pub const OPTIONS: [&str; 5] = ["classic_tone", "vni", "brackets", "log", "esc_flip"];
 
 #[derive(Default)]
 pub struct Settings {

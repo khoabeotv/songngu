@@ -40,8 +40,11 @@ Hành vi chung:
 
 - **Nhìn từ sau**: từ còn phân vân (hai phương án chênh dưới 10⁴ lần) để từ sau đổi lại ("xin visa may mắn" -> "xin vía may mắn"). Từ sau phải làm phương án kia hơn 3 lần, tính cả xác suất đổi tiếng ("Tô subtle" -> "Too subtle") và kiểu nối ("lơ-fidelity" -> "low-fidelity").
 - **Lật**, theo thứ tự: từ đang gõ; lần từ sau vừa tự đổi từ trước (hoàn tác); từ vừa gõ xong (còn trong 4 dấu ngăn cách); từ ngay trước con trỏ (chỉ đường thay chữ). Bộ gõ nhớ 64 từ gần nhất cùng phím đã gõ; chữ khác (dán vào, gõ từ trước) thì chữ Latin thành Telex của nó, chữ Việt thành phím Telex với phím dấu thanh đặt chỗ cho ra từ Anh có thật ("tét" -> "test").
-  - Esc (app thường): lật chữ bộ gõ vừa đưa vào; từ trước con trỏ chỉ khi lúc gõ bộ gõ còn phân vân (chênh dưới 1000 lần) hoặc người dùng đã lật nó. Không có gì để lật thì Esc là của app. Esc lần nữa trong 1 giây (`esc_undo_window`) trả lại chữ, bỏ điều vừa học, đưa Esc cho app.
+  - Backspace (mặc định): Backspace đầu tiên bấm ngay sau dấu ngăn cách vừa gõ thì lật lần vừa tự đổi, hoặc từ đó nếu hai phương án đều đáng kể (chênh dưới 1000 lần: did/đi, theme/thêm, khoảng 1% số từ); còn lại xoá như thường, nên "tiêng " + Backspace + s vẫn thành "tiếng". Esc trơn là của app.
+  - Esc (tuỳ chọn `esc_flip`, app thường): lật chữ bộ gõ vừa đưa vào; từ trước con trỏ chỉ khi lúc gõ bộ gõ còn phân vân hoặc người dùng đã lật nó. Không có gì để lật thì Esc là của app.
+  - Bấm lại chính phím vừa lật trong 1 giây (`esc_undo_window`): trả lại chữ, bỏ điều vừa học, đưa phím cho app (Backspace xoá, Esc đóng hộp thoại). Giữ Backspace để xoá cả đoạn vẫn xoá đúng.
   - Ctrl+Esc / Shift+Esc (`Flip`): mọi app, lật cả chữ bộ gõ không gõ ra. Terminal/IDE chỉ có cách này.
+- **Gõ lại là lật**: xoá hết một từ mà hai phương án đều đáng kể (đang gõ dở, hoặc từ vừa chốt sau khi đã xoá dấu ngăn cách) rồi gõ ngay ra đúng cặp phương án đó thì ép phương án còn lại, ghi nhớ như một lần lật. Gõ khác đi hoặc sang từ khác thì thôi.
 - Mỗi lần lật được nhớ vào `memory.tsv` (`memory.rs`).
 - Backspace trong từ xoá chữ đang hiện, giữ dấu ("tiếng" -> "tiến"); chỉ mất chữ cuối thì để chính phím Backspace đi vào app. Gõ ngay sau một từ đã có thì mở lại từ đó ("tiêng" + s -> "tiếng"). Không đọc được chữ (chặn phím, ô không cho đọc) thì chỉ mở lại từ vừa gõ khi đã xoá hết dấu ngăn cách sau nó (gõ "tieeng ", Backspace, s -> "tiếng").
 - Enter, Tab, mũi tên, phím tắt, click chuột: kết thúc từ (sửa nốt chữ nếu cần) rồi để app xử lý.
