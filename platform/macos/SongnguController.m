@@ -88,17 +88,28 @@ static NSString *textBefore(id sender) {
     return s ? s.string : nil;
 }
 
+// App không báo vị trí con trỏ ngần này lần thay liền thì chuyển hẳn sang chặn phím. Một lần lỡ nhịp (Flutter, Electron báo vị
+// trí trễ ở đầu ô nhập) không đủ để kết luận cả app.
+static const int kNoCursorLimit = 3;
+
 static void apply(SnAction a, id sender) {
+    static int noCursor;
+    static NSString *noCursorApp;
     NSString *commit = [NSString stringWithUTF8String:a.commit];
     NSRange replace = NSMakeRange(NSNotFound, NSNotFound);
     if (a.replace_before > 0) {
         NSRange sel = [sender selectedRange];
+        NSString *bundle = [sender bundleIdentifier];
         if (sel.location != NSNotFound && sel.location >= a.replace_before) {
             replace = NSMakeRange(sel.location - a.replace_before, a.replace_before);
+            noCursor = 0;
         } else {
-            // không biết vị trí con trỏ: app này cần chặn phím. Lần này thử ký tự DEL (nhiều app bỏ qua).
-            NSString *bundle = [sender bundleIdentifier];
-            if (bundle && !sn_tap_app(gEngine, bundle.UTF8String)) sn_set_tap_app(gEngine, bundle.UTF8String, true);
+            noCursor = [bundle isEqualToString:noCursorApp] ? noCursor + 1 : 1;
+            noCursorApp = bundle;
+            if (noCursor >= kNoCursorLimit && bundle && !sn_tap_app(gEngine, bundle.UTF8String))
+                sn_set_tap_app(gEngine, bundle.UTF8String, true);
+            // lần này: sửa bằng phím giả nếu có quyền, không thì thử ký tự DEL (nhiều app bỏ qua)
+            if (keyTapPostEdit(a.erase, commit)) return;
             commit = [[@"" stringByPaddingToLength:a.erase withString:@"\x7f" startingAtIndex:0] stringByAppendingString:commit];
         }
     }
@@ -127,7 +138,7 @@ static void apply(SnAction a, id sender) {
     songnguLoad();
     if (!gEngine) return NO;
     // phím bộ gõ tự bắn, hoặc app do đường chặn phím lo: để app tự xử lý
-    if (event.CGEvent && CGEventGetIntegerValueField(event.CGEvent, kCGEventSourceUserData) == SN_SYNTHETIC) return NO;
+    if (keyTapIsOurs(event)) return NO;
     NSString *bundle = [sender bundleIdentifier];
     if (keyTapOwns(bundle)) return NO;
     static BOOL asked;

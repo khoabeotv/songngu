@@ -18,6 +18,10 @@ void keyTapStart(void);
 // Đường chặn phím đang lo app này: lớp InputMethodKit để phím đi qua.
 BOOL keyTapOwns(NSString *bundle);
 BOOL keyTapRunning(void);
+// Xoá `erase` ký tự rồi gõ `text` bằng phím giả (khi app lỡ không báo vị trí con trỏ). NO nếu chưa có quyền Trợ năng.
+BOOL keyTapPostEdit(uint32_t erase, NSString *text);
+// Phím này do bộ gõ tự bắn: lớp IMK để app xử lý.
+BOOL keyTapIsOurs(NSEvent *event);
 // Mở hộp thoại xin quyền Trợ năng.
 void keyTapAskPermission(void);
 // App đang ở trước mặt (menu bộ gõ áp cho app này).

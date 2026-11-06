@@ -51,13 +51,15 @@ static NSString *targetBundle(CGEventRef ev) {
     return keyTapFrontApp();
 }
 
+// `proxy` NULL: gửi vào phiên (ngoài callback của tap), xếp sau phím đang xử lý.
 static void post(CGEventTapProxy proxy, CGKeyCode code, const UniChar *chars, UniCharCount n) {
     for (int down = 1; down >= 0; down--) {
         CGEventRef e = CGEventCreateKeyboardEvent(gSource, code, down);
         CGEventSetFlags(e, 0);
         if (n) CGEventKeyboardSetUnicodeString(e, n, chars);
         CGEventSetIntegerValueField(e, kCGEventSourceUserData, SN_SYNTHETIC);
-        CGEventTapPostEvent(proxy, e);
+        if (proxy) CGEventTapPostEvent(proxy, e);
+        else CGEventPost(kCGSessionEventTap, e);
         CFRelease(e);
     }
 }
@@ -73,6 +75,27 @@ static void apply(CGEventTapProxy proxy, uint32_t erase, NSString *text) {
                               [s getCharacters:buf range:NSMakeRange(0, n)];
                               post(proxy, kVK_ANSI_A, buf, n);
                           }];
+}
+
+// Phím giả gửi qua keyTapPostEdit còn chưa tới lớp IMK (phòng khi app làm mất dấu SN_SYNTHETIC trên đường đi).
+static int gPendingIMK;
+
+BOOL keyTapPostEdit(uint32_t erase, NSString *text) {
+    if (!gSource || !AXIsProcessTrusted()) return NO;
+    __block int n = (int)erase;
+    [text enumerateSubstringsInRange:NSMakeRange(0, text.length)
+                             options:NSStringEnumerationByComposedCharacterSequences
+                          usingBlock:^(NSString *s, NSRange r, NSRange er, BOOL *stop) { n++; }];
+    gPendingIMK += n;
+    apply(NULL, erase, text);
+    return YES;
+}
+
+BOOL keyTapIsOurs(NSEvent *event) {
+    BOOL marked = event.CGEvent && CGEventGetIntegerValueField(event.CGEvent, kCGEventSourceUserData) == SN_SYNTHETIC;
+    BOOL pending = gPendingIMK > 0 && (event.keyCode == kVK_Delete || event.keyCode == kVK_ANSI_A);
+    if (pending) gPendingIMK--;
+    return marked || pending;
 }
 
 static CGEventRef onEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef ev, void *ctx) {
