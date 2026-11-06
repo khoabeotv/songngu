@@ -32,7 +32,7 @@ Cần macOS 12 trở lên, Xcode Command Line Tools (`xcode-select --install`) v
 
 | Phím | Lật gì |
 |---|---|
-| **Backspace** ngay sau từ (sau dấu cách hoặc dấu câu vừa gõ) | Từ vừa gõ, nếu cả hai phương án đều là từ có thật (`did`/đi, `theme`/thêm, `visa`/vía); hoặc lần bộ gõ vừa tự sửa từ trước. Từ khác thì Backspace xoá như thường |
+| **Backspace** ngay sau từ (sau dấu cách hoặc dấu câu vừa gõ) | Từ vừa gõ, nếu cả hai phương án đều là từ có thật (`did`/đi, `theme`/thêm, `visa`/vía), trừ khi ngữ cảnh đã rất chắc ("of" trong "the cost of"); hoặc lần bộ gõ vừa tự sửa từ trước. Từ khác thì Backspace xoá như thường |
 | **Ctrl+Esc** (hoặc Shift+Esc), mọi app | Từ đang gõ dở, từ vừa gõ, hoặc từ bất kỳ ngay trước con trỏ (click quay lại sau từ rồi bấm; không dùng được ở terminal và app không cho bộ gõ đọc chữ như Zalo) |
 
 - Ví dụ: gõ `did ` ra "did ", bấm Backspace thành "đi ", gõ tiếp.

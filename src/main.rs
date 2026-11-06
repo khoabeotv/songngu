@@ -159,10 +159,12 @@ fn main() {
             let look = arg(&args, "--lookahead").map_or(3.0, |v| v.parse().unwrap());
             let margin = arg(&args, "--look-margin").map_or(1e4, |v| v.parse().unwrap());
             let blind = args.iter().any(|a| a == "--blind");
+            let bs_ratio = arg(&args, "--bs-ratio").map(|v| v.parse().unwrap());
             let dump = (arg(&args, "--dump"), arg(&args, "--dump-want"));
             let show = arg(&args, "--show").map_or(0, |v| v.parse().unwrap());
             let mut t = typist(&args);
-            session_eval(eng, &pos[1], &mut t, (unsure, look, blind, margin), show, (dump.0.as_deref(), dump.1.as_deref()))
+            let opts = (unsure, look, blind, margin, bs_ratio);
+            session_eval(eng, &pos[1], &mut t, opts, show, (dump.0.as_deref(), dump.1.as_deref()))
         }
         Some("score") => score_cmd(&pos[1], &pos[2], arg(&args, "--show").map_or(0, |v| v.parse().unwrap())),
         _ => eprintln!(
@@ -298,7 +300,7 @@ fn session_eval(
     eng: Engine,
     path: &str,
     typist: &mut Typist,
-    opts: (f64, f64, bool, f64),
+    opts: (f64, f64, bool, f64, Option<f64>),
     mut show: usize,
     dump: (Option<&str>, Option<&str>),
 ) {
@@ -313,6 +315,11 @@ fn session_eval(
     let (mut wrong, mut words) = (0usize, 0usize);
     // phím mà Esc lật từ đang gõ (hai phương án chênh dưới unsure_ratio)
     let (mut keys_n, mut keys_unsure) = (0usize, 0usize);
+    // từ sai lúc vừa chốt, và trong đó bao nhiêu từ Backspace ngay sau lật được
+    let (mut wrong_at_commit, mut bs_fixable) = (0usize, 0usize);
+    if let Some(r) = opts.4 {
+        s.backspace_ratio = r;
+    }
     // Áp một Action lên dòng đang gõ như app thật (xoá rồi chèn trước con trỏ, Backspace đi thẳng vào app).
     let press = |s: &mut Session, doc: &mut String, ev: Event| {
         let before = s.wants_before().then(|| doc.clone());
@@ -327,10 +334,12 @@ fn session_eval(
     };
     for line in read_lines(path) {
         let (mut doc, mut want) = (String::new(), String::new());
+        let mut last_w: Option<String> = None;
         for u in typist.line(&line) {
             match u {
                 Unit::Word { keys, want: w } => {
                     want += &w;
+                    last_w = Some(w.clone());
                     for k in keys.chars() {
                         press(&mut s, &mut doc, if k == BS { Event::Backspace } else { Event::Char(k) });
                         let v = s.eng.view();
@@ -342,7 +351,15 @@ fn session_eval(
                 }
                 Unit::Sep(sep) => {
                     for c in sep.chars() {
+                        let flag = s.stats.backspace_flippable;
                         press(&mut s, &mut doc, Event::Char(c));
+                        if let Some(w) = last_w.take() {
+                            let body = &doc[..doc.len() - c.len_utf8()];
+                            if !body.to_lowercase().ends_with(&w.to_lowercase()) {
+                                wrong_at_commit += 1;
+                                bs_fixable += usize::from(s.stats.backspace_flippable > flag);
+                            }
+                        }
                     }
                     want += &sep;
                 }
@@ -365,9 +382,10 @@ fn session_eval(
     }
     let st = &s.stats;
     println!(
-        "words {words}  wrong {wrong} ({:.2}%)  unsure words {:.2}%  lookahead flips {} ({:.3}%)  replace ops {:.2}/word  unsure keys {:.2}%{}",
+        "words {words}  wrong {wrong} ({:.2}%)  unsure words {:.2}%  backspace-flippable {:.2}%  lookahead flips {} ({:.3}%)  replace ops {:.2}/word  unsure keys {:.2}%  wrong at commit {wrong_at_commit} (backspace fixes {bs_fixable}){}",
         100.0 * wrong as f64 / words as f64,
         100.0 * st.unsure as f64 / st.words.max(1) as f64,
+        100.0 * st.backspace_flippable as f64 / st.words.max(1) as f64,
         st.lookahead_flips,
         100.0 * st.lookahead_flips as f64 / st.words.max(1) as f64,
         st.rewrites as f64 / st.words.max(1) as f64,

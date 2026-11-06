@@ -166,6 +166,8 @@ pub struct Stats {
     pub words: usize,
     /// Từ gõ xong mà engine còn phân vân (Esc lật được).
     pub unsure: usize,
+    /// Từ gõ xong mà Backspace ngay sau đó sẽ lật (`backspace_ratio`).
+    pub backspace_flippable: usize,
     /// Lần thay chữ đã nằm trong app: người dùng thấy chữ đổi.
     pub rewrites: usize,
 }
@@ -206,6 +208,10 @@ pub struct Session<'a> {
     pub esc_undo_window: Duration,
     /// Backspace ngay sau một từ lật nó (mặc định), Esc trơn là của app. Tắt: Esc lật như cũ ở app thường.
     pub backspace_flip: bool,
+    /// Backspace còn lật từ mà cả hai phương án đều có trong từ điển nếu chênh dưới ngần này lần ("làm visa" ~10^3,7).
+    /// Dev: 10^3/10^4/10^5 lật được 83/88/92 từ sai lúc chốt, đổi lại 0,6-1,4% / 1,3-3% / 2,9-6% số từ Backspace sẽ
+    /// lật thay vì xoá ("of" trong "the cost of" ~10^5,5).
+    pub backspace_ratio: f64,
     /// Gõ lại từ vừa xoá: ra phương án kia (`Retype`). `del_from`: từ đang gõ lúc bắt đầu xoá nó; `deleting`: đang xoá
     /// từ đã chốt; `retype_forced`: đã ép từ đang gõ theo `retype` (bỏ ép nếu gõ khác đi).
     retype: Option<Retype>,
@@ -286,6 +292,7 @@ impl<'a> Session<'a> {
             esc_undo: None,
             esc_undo_window: Duration::from_millis(1000),
             backspace_flip: true,
+            backspace_ratio: 1e4,
             retype: None,
             bs_ready: false,
             del_from: None,
@@ -396,8 +403,13 @@ impl<'a> Session<'a> {
 
     /// Engine còn phân vân về từ này (Esc lật được).
     fn uncertain(&self, v: &View) -> bool {
+        self.within(v, self.unsure_ratio)
+    }
+
+    /// Hai phương án khác nhau và chênh dưới `ratio` lần.
+    fn within(&self, v: &View, ratio: f64) -> bool {
         match (v.vn_p, v.en_p) {
-            (Some(a), Some(b)) => v.differs() && (a.ln() - b.ln()).abs() < self.unsure_ratio.ln(),
+            (Some(a), Some(b)) => v.differs() && (a.ln() - b.ln()).abs() < ratio.ln(),
             _ => false,
         }
     }
@@ -459,7 +471,8 @@ impl<'a> Session<'a> {
         self.committed(&v);
         self.shown.clear();
         let doubt = if self.doubtful(&v) { doubt_of(&v) } else { None };
-        let unsure = self.uncertain(&v);
+        let unsure = self.uncertain(&v) || (self.eng.last_both_real() && self.within(&v, self.backspace_ratio));
+        self.stats.backspace_flippable += usize::from(unsure);
         let alt = v.differs().then(|| if v.lang == Lang::Vn { v.en_text.clone() } else { v.vn_text.clone() });
         self.tail = Some(Tail { word: v.text.clone(), seps: String::new(), doubt, unsure, alt });
     }
@@ -653,7 +666,7 @@ impl<'a> Session<'a> {
             }
         }
         if let Some(t) = self.tail.take() {
-            // Backspace còn là phím xoá: chỉ lật từ mà hai phương án đều đáng kể (did/đi, theme/thêm), không lật
+            // Backspace còn là phím xoá: chỉ lật từ mà hai phương án đều là từ có thật (did/đi, visa/vía), không lật
             // "tiêng"/"tieeng" (xoá dấu cách để gõ tiếp dấu vào từ)
             // đã xoá hết dấu ngăn cách thì Backspace tiếp là xoá chữ của từ
             let fits = reach != Reach::Backspace || (t.unsure && !t.seps.is_empty());

@@ -148,6 +148,8 @@ struct Last {
     /// chỉ giữ trạng thái cuối: đang hiện khác `natural` thì học, quay về thì bỏ (không học cả hai chiều).
     natural: Lang,
     learned: bool,
+    /// Cả hai phương án đều là từ có trong từ điển (không phải âm tiết/từ chưa gặp).
+    both_real: bool,
 }
 
 /// Mỗi lần người dùng lật từ bằng ngang ngần này lần gặp cặp từ đó trong corpus: một lần sửa đã đủ để lần sau
@@ -244,6 +246,12 @@ impl<'a> Engine<'a> {
             // âm tiết hiếm (đờ, giúm, xuê) có thật nhưng ngoài phụ đề và corpus: vẫn còn là phương án, để ngữ cảnh quyết.
             // Chỉ khi có ngữ cảnh: không có thì từ Anh lạ cũng không có xác suất, ROAS sẽ thành ROÁ.
             .or_else(|| self.ctx.and(self.vn.unseen_prob(&s, t, self.cfg.unseen_vn)))
+    }
+
+    /// Từ Việt đang gõ có trong từ điển (`vn_word` không tính phần âm tiết chưa gặp).
+    fn vn_known(&self) -> bool {
+        let (s, t) = (self.comp.toneless(), self.comp.tone);
+        !self.comp.undone && (self.ctx.is_some_and(|c| c.vn.word_prob(&s, t).is_some()) || self.vn.word_prob(&s, t).is_some())
     }
 
     fn vn_prefix(&self, s: &[char], t: crate::syllable::Tone) -> Option<f64> {
@@ -482,6 +490,11 @@ impl<'a> Engine<'a> {
     }
 
     /// Ngữ cảnh (khoá `canon` của từ trước) của từ vừa chốt, để mở lại nó đúng ngữ cảnh.
+    /// Từ vừa chốt có hai phương án đều là từ có trong từ điển (did/đi, visa/vía).
+    pub fn last_both_real(&self) -> bool {
+        self.last.as_ref().is_some_and(|l| l.both_real)
+    }
+
     pub fn last_context(&self) -> Option<String> {
         self.last.as_ref().map(|l| l.prev.clone())
     }
@@ -554,7 +567,8 @@ impl<'a> Engine<'a> {
         let vn_p = self.vn_word().map(|u| {
             self.order_penalty() * self.memory.preference(&vn_key) * self.contextual(Lang::Vn, u, |f| f.count(&vn_key))
         });
-        let (en_text, _, en_u) = self.en_side(|w| self.en_word(w), true);
+        let (en_text, en_low, en_u) = self.en_side(|w| self.en_word(w), true);
+        let both_real = vn_text != en_text && self.vn_known() && self.en_word(&en_low).is_some();
         let en_key = canon(&en_text);
         let en_p = en_u.map(|u| self.memory.preference(&en_key) * self.contextual(Lang::En, u, |f| f.count(&en_key)));
         let lang = match (vn_p, en_p) {
@@ -595,7 +609,7 @@ impl<'a> Engine<'a> {
         self.after_word = true;
         let learned = lang != natural && self.cfg.learn;
         self.last =
-            Some(Last { vn_text: vn_text.clone(), en_text: en_text.clone(), lang, prev: before, counted: informative, natural, learned });
+            Some(Last { vn_text: vn_text.clone(), en_text: en_text.clone(), lang, prev: before, counted: informative, natural, learned, both_real });
         self.keys.clear();
         self.comp = Composer::new(self.cfg.telex);
         self.shown = None;

@@ -310,6 +310,19 @@ fn second_backspace_right_after_a_flip_gives_it_back_and_deletes() {
 }
 
 #[test]
+fn backspace_flips_a_real_word_pair_even_when_the_context_is_sure() {
+    let (vn, en) = lex();
+    for blind in [false, true] {
+        let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx()));
+        s.blind = blind;
+        let mut app = App::default();
+        // corpus luôn "làm visa": ngữ cảnh rất chắc, nhưng "vía" vẫn là từ có thật
+        app.run(&mut s, "lafm visa <");
+        assert_eq!(app.doc, "làm vía ");
+    }
+}
+
+#[test]
 fn holding_backspace_flips_at_most_once() {
     for mut s in [session(), blind()] {
         let mut app = App::default();

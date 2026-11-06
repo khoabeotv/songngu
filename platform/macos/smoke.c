@@ -17,14 +17,17 @@ int main(int argc, char **argv) {
         uint32_t kind = *p == '<' ? SN_BACKSPACE : *p == '~' ? SN_ESCAPE : *p == '^' ? SN_FLIP : *p == '|' ? SN_OTHER : SN_CHAR;
         int wants = kind == SN_ESCAPE || kind == SN_FLIP || sn_wants_before(h);
         SnAction a = sn_event(h, kind, (unsigned char)*p, wants ? doc : NULL);
-        // xoá `cut` ký tự cuối
-        uint32_t cut = a.erase + (a.pass && kind == SN_BACKSPACE);
+        // như app: xoá `erase` ký tự cuối, chèn `commit`, rồi mới tới phím được cho đi qua (Backspace xoá một ký tự)
         size_t n = strlen(doc);
-        for (uint32_t i = 0; i < cut && n > 0; i++) {
+        for (uint32_t i = 0; i < a.erase && n > 0; i++) {
             do { n--; } while (n > 0 && ((unsigned char)doc[n] & 0xC0) == 0x80);
         }
         doc[n] = 0;
         strncat(doc, a.commit, sizeof doc - strlen(doc) - 1);
+        if (a.pass && kind == SN_BACKSPACE && (n = strlen(doc)) > 0) {
+            do { n--; } while (n > 0 && ((unsigned char)doc[n] & 0xC0) == 0x80);
+            doc[n] = 0;
+        }
         printf("%c  app=[%s]%s%s\n", *p, doc, a.erase ? "  replace" : "", a.pass ? "  pass" : "");
     }
     return 0;
