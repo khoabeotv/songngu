@@ -187,6 +187,27 @@ pub unsafe extern "C" fn sn_event(h: *mut Handle, kind: u32, ch: u32, before: *c
     SnAction { commit: h.commit.as_ptr(), replace_before: a.replace_before as u32, erase: a.erase as u32, pass: a.pass }
 }
 
+/// Phím sắp tới đi đường chặn phím dù app không có trong danh sách (app không mở phiên nhập liệu với bộ gõ): engine
+/// không đọc chữ trong app (`blind`). Đổi đường giữa chừng thì kết thúc từ đang gõ.
+///
+/// # Safety
+/// `h` từ `sn_create`.
+#[no_mangle]
+pub unsafe extern "C" fn sn_set_blind(h: *mut Handle, on: bool) {
+    let h = &mut *h;
+    if h.broken {
+        return;
+    }
+    let blind = on || h.settings.tap(&h.app);
+    if h.session.blind != blind {
+        if catch_unwind(AssertUnwindSafe(|| h.session.commit_all())).is_err() {
+            h.broken = true;
+            return;
+        }
+        h.session.blind = blind;
+    }
+}
+
 /// App (bundle id) dùng đường chặn phím + Backspace thay vì API thay chữ.
 ///
 /// # Safety
@@ -282,7 +303,7 @@ pub unsafe extern "C" fn sn_forget_memory(h: *mut Handle) {
     }
 }
 
-/// Tuỳ chọn trong menu: "classic_tone", "vni", "brackets", "log", "esc_flip"; theo app hiện tại: "exclude" (bỏ qua).
+/// Tuỳ chọn trong menu: "classic_tone", "vni", "brackets", "log", "esc_flip", "manual_tap"; theo app hiện tại: "exclude".
 /// Chặn phím theo app: `sn_tap_app` / `sn_set_tap_app` (app đang trước mặt, không phải app của bộ gõ).
 ///
 /// # Safety

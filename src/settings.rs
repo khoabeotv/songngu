@@ -3,7 +3,8 @@
 //!   code<TAB>bundle id         thêm app kiểu Terminal/IDE (Esc của app, nghiêng tiếng Anh)
 //!   tap<TAB>bundle id          app không thay chữ được hoặc không đưa phím qua bộ gõ (tự ghi khi kiểm tra thất bại, hoặc
 //!                              chọn trong menu): chặn phím và xoá bằng Backspace. Dòng `marked` của bản cũ đọc như `tap`.
-//!   option<TAB>tên<TAB>0|1     classic_tone, vni, brackets, log, esc_flip (lật bằng Esc thay cho Backspace)
+//!   option<TAB>tên<TAB>0|1     classic_tone, vni, brackets, log, esc_flip (lật bằng Esc thay cho Backspace),
+//!                              manual_tap (chỉ chặn phím ở app trong danh sách, không tự chặn ở app không nhận bộ gõ)
 
 use std::collections::BTreeSet;
 
@@ -12,6 +13,7 @@ use crate::ime::AppKind;
 /// Terminal, IDE, trình soạn thảo code có sẵn: Esc là phím của app (vim), gõ chủ yếu tiếng Anh.
 const CODE_APPS: &[&str] = &[
     "com.apple.Terminal",
+    "dev.herdr.app",
     "com.googlecode.iterm2",
     "dev.warp.Warp-Stable",
     "com.mitchellh.ghostty",
@@ -31,8 +33,10 @@ const CODE_APPS: &[&str] = &[
     "com.google.android.studio",
 ];
 
-/// Luôn chặn phím và xoá bằng Backspace: terminal (chữ đã gửi vào shell không thay được bằng API thay chữ).
+/// Luôn chặn phím và xoá bằng Backspace: terminal (chữ đã gửi vào shell không thay được bằng API thay chữ). Herdr (gpui):
+/// view terminal không nhận nhập liệu nên phím không qua bộ gõ, và thanh menu có thể không hiện menu SN để bật tay.
 const TAP_APPS: &[&str] = &[
+    "dev.herdr.app",
     "com.apple.Terminal",
     "com.googlecode.iterm2",
     "dev.warp.Warp-Stable",
@@ -43,7 +47,7 @@ const TAP_APPS: &[&str] = &[
     "co.zeit.hyper",
 ];
 
-pub const OPTIONS: [&str; 5] = ["classic_tone", "vni", "brackets", "log", "esc_flip"];
+pub const OPTIONS: [&str; 6] = ["classic_tone", "vni", "brackets", "log", "esc_flip", "manual_tap"];
 
 #[derive(Default)]
 pub struct Settings {

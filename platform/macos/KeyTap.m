@@ -14,6 +14,7 @@ static NSString *gFront;            // app trước mặt
 static NSMutableDictionary<NSNumber *, NSString *> *gPidBundle;
 static NSMutableIndexSet *gSwallowed;  // phím đã nuốt keyDown: nuốt luôn keyUp
 static BOOL gTyping;                // phím gần nhất đi đường chặn phím (click chuột thì kết thúc từ)
+static NSString *gSession;          // app đang mở phiên nhập liệu với bộ gõ (activateServer)
 
 BOOL keyTapRunning(void) {
     return gTap && CGEventTapIsEnabled(gTap);
@@ -21,6 +22,11 @@ BOOL keyTapRunning(void) {
 
 NSString *keyTapFrontApp(void) {
     return gFront ?: NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier;
+}
+
+void keyTapSession(NSString *bundle, BOOL open) {
+    if (open) gSession = bundle;
+    else if ([bundle isEqualToString:gSession]) gSession = nil;
 }
 
 BOOL keyTapOwns(NSString *bundle) {
@@ -120,12 +126,19 @@ static CGEventRef onEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef ev
     }
     if (type != kCGEventKeyDown) return ev;
     NSString *bundle = targetBundle(ev);
-    if (!sn_tap_app(h, bundle.UTF8String)) {
+    BOOL listed = sn_tap_app(h, bundle.UTF8String);
+    // App không mở phiên nhập liệu (terminal kiểu gpui, Flutter ở vài máy): phím không bao giờ tới bộ gõ, đường này lo.
+    // Bỏ qua phím giữ lặp (game, phím di chuyển). Phím cho đi qua thì đánh dấu, phòng phiên mở muộn hơn phím.
+    BOOL orphan = !listed && ![bundle isEqualToString:gSession] && !sn_option_get(h, "manual_tap") &&
+                  !CGEventGetIntegerValueField(ev, kCGKeyboardEventAutorepeat);
+    if (!listed && !orphan) {
         gTyping = NO;
         return ev;
     }
     songnguSetApp(bundle);
+    sn_set_blind(h, true);
     gTyping = YES;
+    if (orphan) CGEventSetIntegerValueField(ev, kCGEventSourceUserData, SN_SYNTHETIC);
     NSEvent *e = [NSEvent eventWithCGEvent:ev];
     uint32_t ch = 0;
     uint32_t kind = songnguEventKind(e, &ch);

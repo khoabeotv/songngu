@@ -31,8 +31,9 @@ Không có vùng soạn (gạch chân): mỗi phím vào app ngay; engine đổi
   - Đầu mỗi phím, bộ gõ so chữ trước con trỏ với chữ nó đã để lại. Khác sau phím thường = con trỏ đã bị click đi, bắt đầu từ mới. So ở phím sau chứ không ngay sau khi thay vì Chrome/Electron cập nhật chữ đọc được hơi trễ.
   - Khác ngay sau một lần thay, hoặc 3 lần thay liền app không báo vị trí con trỏ = app không thay được: app đó chuyển hẳn sang chặn phím (ghi `tap` trong `settings.tsv`). Một lần lỡ nhịp (Flutter, Electron báo vị trí trễ ở đầu ô nhập) thì riêng lần đó sửa bằng phím giả.
   - App không cho đọc chữ (Zalo, vài app Flutter) thì thay theo vị trí con trỏ, không kiểm.
-- **Chặn phím** (`KeyTap.m`; terminal, app tự phát hiện ở trên, hoặc menu "Chặn phím ở app này"): bắt phím ở cấp phiên (CGEventTap, cần quyền Trợ năng), xoá bằng Backspace giả rồi gõ chữ mới bằng phím mang chuỗi Unicode; phím không đổi gì thì để phím thật đi qua.
+- **Chặn phím** (`KeyTap.m`; terminal, app tự phát hiện ở trên, menu "Chặn phím ở app này", và mọi phím rơi vào app đang không mở phiên nhập liệu với bộ gõ): bắt phím ở cấp phiên (CGEventTap, cần quyền Trợ năng), xoá bằng Backspace giả rồi gõ chữ mới bằng phím mang chuỗi Unicode; phím không đổi gì thì để phím thật đi qua.
   - Không đọc được chữ trong app nên chỉ mở lại được từ bộ gõ vừa đưa vào; click chuột, Enter, mũi tên kết thúc từ.
+  - App không mở phiên nhập liệu (`activateServer`/`deactivateServer`; terminal của Herdr, vài app Flutter trên một số máy) thì phím không bao giờ tới lớp IMK: đường này tự lo, bỏ qua phím giữ lặp, và đánh dấu phím cho đi qua để IMK không xử lý lại nếu phiên mở muộn hơn phím. Chỗ không có ô nhập (danh sách thư, Finder) cũng rơi vào đây: gõ kiểu `dd`, `as` vẫn có thể sinh Backspace giả, như bộ gõ chặn phím. Tắt bằng tuỳ chọn `manual_tap`.
   - Chỉ chạy khi Songngu là nguồn nhập đang chọn. Chưa có quyền thì lớp IMK thử ký tự DEL qua `insertText` (Ghostty bỏ qua).
   - Bộ gõ chặn phím khác (XKey, EVKey...) chạy cùng thì hai bên giành phím: Ctrl+Space không đổi nguồn nhập, app không gửi phím qua bộ gõ.
 

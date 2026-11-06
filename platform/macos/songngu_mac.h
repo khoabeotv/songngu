@@ -17,6 +17,8 @@ uint32_t songnguEventKind(NSEvent *event, uint32_t *ch);
 void keyTapStart(void);
 // Đường chặn phím đang lo app này: lớp InputMethodKit để phím đi qua.
 BOOL keyTapOwns(NSString *bundle);
+// App vừa mở (YES) / đóng (NO) phiên nhập liệu với bộ gõ. App đang không có phiên thì đường chặn phím tự lo.
+void keyTapSession(NSString *bundle, BOOL open);
 BOOL keyTapRunning(void);
 // Xoá `erase` ký tự rồi gõ `text` bằng phím giả (khi app lỡ không báo vị trí con trỏ). NO nếu chưa có quyền Trợ năng.
 BOOL keyTapPostEdit(uint32_t erase, NSString *text);

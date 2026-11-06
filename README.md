@@ -53,6 +53,7 @@ Cần macOS 12 trở lên, Xcode Command Line Tools (`xcode-select --install`) v
 | Gõ VNI | Phím số làm dấu |
 | `[ ]` gõ ơ ư | `[` = ơ, `]` = ư |
 | Lật Anh/Việt bằng Esc thay cho Backspace | Backspace chỉ còn là xoá; Esc lật ở app thường |
+| Chỉ chặn phím ở app trong danh sách | Tắt việc tự chặn phím ở app không nhận bộ gõ. Mặc định Songngu tự lo các app này (như XKey), đổi lại gõ chữ ở chỗ không có ô nhập (danh sách thư, Finder) có thể sinh Backspace giả |
 | Ghi nhật ký gõ | Ghi phím và chữ ra `typing-log.tsv` trên máy này (để báo lỗi), không ghi trong ô mật khẩu |
 | Quên những gì đã học | Xoá bộ nhớ lật; file cũ giữ ở `memory-forgotten.tsv` |
 
@@ -65,6 +66,7 @@ File người dùng nằm trong `~/Library/Application Support/Songngu/`: `memor
 | Không thấy biểu tượng SN | System Settings > Menu Bar: bật mục Text Input/bộ gõ; thanh menu nhiều icon thì có thể bị tai thỏ che |
 | Ctrl+Space không đổi bộ gõ, app không nhận bộ gõ | Đang chạy bộ gõ chặn phím khác (XKey, EVKey...): thoát nó và gỡ khỏi Login Items |
 | Terminal không ra dấu | Chưa có quyền Trợ năng (bước 3 phần cài đặt) |
+| Một app (terminal lạ) hoàn toàn không ra tiếng Việt, thanh menu hiện A | App không đưa phím qua bộ gõ; Songngu tự chặn phím ở đó khi có quyền Trợ năng. Đã bật "Chỉ chặn phím ở app trong danh sách" thì thêm tay vào danh sách chặn phím, `printf 'tap\t<bundle id>\n' >> ~/Library/Application\ Support/Songngu/settings.tsv; pkill -x Songngu` (bundle id: `osascript -e 'id of app "Tên App"'`) |
 | Một app gõ ra chữ lặp hoặc sai | Menu SN > "Chặn phím ở app này" khi đang ở app đó |
 | Biểu tượng hiện "A" ở một app | App đó không mở phiên bộ gõ; Songngu vẫn là bộ gõ đang chọn |
 

@@ -130,6 +130,7 @@ static void apply(SnAction a, id sender) {
     [super activateServer:sender];
     trace(sender, @"activate");
     songnguLoad();
+    keyTapSession([sender bundleIdentifier], YES);
     songnguSetApp([sender bundleIdentifier]);
 }
 
@@ -141,6 +142,7 @@ static void apply(SnAction a, id sender) {
     if (keyTapIsOurs(event)) return NO;
     NSString *bundle = [sender bundleIdentifier];
     if (keyTapOwns(bundle)) return NO;
+    keyTapSession(bundle, YES);
     static BOOL asked;
     if (!asked && !keyTapRunning() && bundle && sn_tap_app(gEngine, bundle.UTF8String)) {
         // app cần chặn phím (terminal) mà chưa có quyền: hỏi một lần mỗi lần bộ gõ chạy
@@ -148,6 +150,7 @@ static void apply(SnAction a, id sender) {
         keyTapAskPermission();
     }
     songnguSetApp(bundle);
+    sn_set_blind(gEngine, false);
     uint32_t ch = 0;
     uint32_t kind = songnguEventKind(event, &ch);
     // Chỉ đọc chữ trong app khi engine cần: đầu từ, đang gõ, Esc.
@@ -170,6 +173,7 @@ static void apply(SnAction a, id sender) {
 
 - (void)deactivateServer:(id)sender {
     trace(sender, @"deactivate");
+    keyTapSession([sender bundleIdentifier], NO);
     [self commitComposition:sender];
     if (gEngine) sn_save_memory(gEngine);
     [super deactivateServer:sender];
@@ -187,6 +191,7 @@ static void apply(SnAction a, id sender) {
     NSArray *items = @[
         @[ @"Bỏ qua app này", @"exclude" ], tap, @[ @"Đặt dấu kiểu cũ (hòa, thủy)", @"classic_tone" ], @[ @"Gõ VNI", @"vni" ],
         @[ @"[ ] gõ ơ ư", @"brackets" ], @[ @"Lật Anh/Việt bằng Esc thay cho Backspace", @"esc_flip" ],
+        @[ @"Chỉ chặn phím ở app trong danh sách (không tự chặn ở app không nhận bộ gõ)", @"manual_tap" ],
         @[ @"Ghi nhật ký gõ (chỉ trên máy này)", @"log" ]
     ];
     for (id it in items) {

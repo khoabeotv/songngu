@@ -21,6 +21,7 @@ SnAction sn_event(SnHandle *h, uint32_t kind, uint32_t ch, const char *before);
 bool sn_wants_before(SnHandle *h);  // phím sắp tới cần chữ trước con trỏ (Esc luôn cần, trừ đường chặn phím)
 void sn_commit_all(SnHandle *h);    // kết thúc từ đang gõ (click, đổi app); chữ đã nằm trong app
 bool sn_tap_app(SnHandle *h, const char *bundle_id);              // app dùng đường chặn phím + Backspace
+void sn_set_blind(SnHandle *h, bool on);  // phím sắp tới đi đường chặn phím dù app không trong danh sách
 void sn_set_tap_app(SnHandle *h, const char *bundle_id, bool on);  // lưu vào settings.tsv
 bool sn_save_memory(SnHandle *h);
 uint32_t sn_memory_size(SnHandle *h);  // số từ đã học từ các lần lật
