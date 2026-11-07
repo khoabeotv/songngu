@@ -616,10 +616,25 @@ impl<'a> Engine<'a> {
         View { text, lang, vn_text, en_text, vn_p, en_p }
     }
 
+    /// Số lần gặp `cand` có từ theo sau (corpus + bộ nhớ riêng): bảng ít mẫu thì phần chiết khấu cho từ sau chưa gặp
+    /// ước lượng kém (xem `Session::lookahead_min_followers`).
+    pub fn followers(&self, cand: &str) -> f64 {
+        let corpus = self.ctx.and_then(|c| c.follow(cand)).filter(|_| self.cfg.bigram).map_or(0.0, |f| f.total());
+        corpus + self.memory.follow(cand).map_or(0.0, |f| PERSONAL * f.total())
+    }
+
+    /// Đã gặp cặp (`cand`, `next`) trong corpus hoặc bộ nhớ riêng.
+    pub fn next_attested(&self, cand: &str, next: &str) -> bool {
+        let corpus = self.ctx.and_then(|c| c.follow(cand)).filter(|_| self.cfg.bigram).is_some_and(|f| f.count(next) > 0.0);
+        corpus || self.memory.follow(cand).is_some_and(|f| f.count(next) > 0.0)
+    }
+
     /// P(từ `next` | từ trước là `cand`), cả hai ở dạng khoá `canon`: dùng từ phía sau để xem lại một từ còn phân vân.
     /// Gọi ngay sau `commit` của `next`. `cand_lang`: thứ tiếng của `cand`; có thì phần không nhờ cặp từ tính cả xác suất đổi tiếng (từ Việt mà theo sau
     /// là từ chỉ có tiếng Anh thì đáng ngờ: "Tô subtle" -> "Too subtle").
-    pub fn next_support(&self, cand: &str, cand_lang: Option<Lang>, next: &str) -> f64 {
+    /// `backoff_only`: bỏ phần cặp từ, chỉ còn xác suất theo tiếng (dùng khi chưa từng gặp `next` sau cả hai phương án,
+    /// xem `next_attested`).
+    pub fn next_support(&self, cand: &str, cand_lang: Option<Lang>, next: &str, backoff_only: bool) -> f64 {
         let word = key_to_word(next);
         let vn = decompose(&word).and_then(|(s, t)| {
             let s: Vec<char> = s.chars().collect();
@@ -637,12 +652,12 @@ impl<'a> Engine<'a> {
         }
         .max(1e-9);
         let (mut count, mut total, mut types) = (0.0, 0.0, 0.0);
-        if let Some(f) = self.ctx.and_then(|c| c.follow(cand)).filter(|_| self.cfg.bigram) {
+        if let Some(f) = self.ctx.and_then(|c| c.follow(cand)).filter(|_| self.cfg.bigram && !backoff_only) {
             count += f.count(next);
             total += f.total();
             types += f.types();
         }
-        if let Some(f) = self.memory.follow(cand) {
+        if let Some(f) = self.memory.follow(cand).filter(|_| !backoff_only) {
             count += PERSONAL * f.count(next);
             total += PERSONAL * f.total();
             types += f.types();

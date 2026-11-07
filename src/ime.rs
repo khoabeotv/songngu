@@ -212,6 +212,9 @@ pub struct Session<'a> {
     /// Dev: 10^3/10^4/10^5 lật được 83/88/92 từ sai lúc chốt, đổi lại 0,6-1,4% / 1,3-3% / 2,9-6% số từ Backspace sẽ
     /// lật thay vì xoá ("of" trong "the cost of" ~10^5,5).
     pub backspace_ratio: f64,
+    /// Phương án kia có ít hơn ngần này lần gặp kèm từ theo sau, và chưa gặp từ sau sau phương án nào: so hai phương
+    /// án chỉ bằng xác suất theo tiếng (xem `commit_word`). Chỉ áp khi phương án kia là từ Anh. Dev: 0/100 cho 340/339.
+    pub lookahead_min_followers: f64,
     /// Gõ lại từ vừa xoá: ra phương án kia (`Retype`). `del_from`: từ đang gõ lúc bắt đầu xoá nó; `deleting`: đang xoá
     /// từ đã chốt; `retype_forced`: đã ép từ đang gõ theo `retype` (bỏ ép nếu gõ khác đi).
     retype: Option<Retype>,
@@ -293,6 +296,7 @@ impl<'a> Session<'a> {
             esc_undo_window: Duration::from_millis(1000),
             backspace_flip: true,
             backspace_ratio: 1e4,
+            lookahead_min_followers: 100.0,
             retype: None,
             bs_ready: false,
             del_from: None,
@@ -448,8 +452,17 @@ impl<'a> Session<'a> {
         let next = canon(&v.text);
         let flip_prev = self.tail.as_ref().and_then(|t| {
             let (alt, p, alt_p, lang) = t.doubt.as_ref()?;
-            let cur = p * self.eng.next_support(&canon(&t.word), Some(*lang), &next);
-            let alt_score = alt_p * self.eng.next_support(&canon(alt), Some(other(*lang)), &next);
+            let (word, alt_key) = (canon(&t.word), canon(alt));
+            // Phương án kia là từ Anh hiếm trong corpus và chưa từng gặp `next` sau phương án nào: so bằng xác suất theo
+            // tiếng cho cả hai. Nếu không, từ phổ biến ("nên") bị chiết khấu mạnh cho từ sau chưa gặp còn từ hiếm (ước
+            // lượng từ vài mẫu) thì không, nên "nene model" thắng "nên model". Danh sách từ Anh lấy từ phụ đề nên lẫn
+            // nhiều từ ngoại/hiếm (nene, mais, caf); âm tiết Việt hiếm (pải, ó) thì vẫn để từ sau kéo lại như cũ.
+            let rare_en_alt = other(*lang) == Lang::En && self.eng.followers(&alt_key) < self.lookahead_min_followers;
+            let backoff = rare_en_alt
+                && !self.eng.next_attested(&word, &next)
+                && !self.eng.next_attested(&alt_key, &next);
+            let cur = p * self.eng.next_support(&word, Some(*lang), &next, backoff);
+            let alt_score = alt_p * self.eng.next_support(&alt_key, Some(other(*lang)), &next, backoff);
             (alt_score > cur * self.lookahead_ratio).then(|| (t.word.clone(), t.seps.clone(), alt.clone()))
         });
         match flip_prev {

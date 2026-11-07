@@ -322,6 +322,27 @@ fn backspace_flips_a_real_word_pair_even_when_the_context_is_sure() {
     }
 }
 
+/// Cần mô hình thật (`models/model.bin`, build tự tải); không có thì bỏ qua.
+#[test]
+fn next_word_does_not_flip_a_common_word_into_a_rare_one() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("models/model.bin");
+    let Ok((vn, en, ctx)) = songngu::open_model(&path) else {
+        eprintln!("bỏ qua: không có {}", path.display());
+        return;
+    };
+    let (vn, en, ctx): (&'static _, &'static _, &'static _) = (Box::leak(Box::new(vn)), Box::leak(Box::new(en)), Box::leak(Box::new(ctx)));
+    let typed = |min: f64| {
+        let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
+        s.lookahead_min_followers = min;
+        let mut app = App::default();
+        app.run(&mut s, "the deploy log nene model ");
+        app.doc
+    };
+    // "nene" (nên gõ mũ muộn) cũng là từ Anh hiếm, gần như không có trong corpus; "nên" thì gặp rất nhiều
+    assert_eq!(typed(0.0), "the deploy log nene model ", "không còn tái hiện lỗi cũ: sửa lại câu thử");
+    assert_eq!(typed(100.0), "the deploy log nên model ");
+}
+
 #[test]
 fn holding_backspace_flips_at_most_once() {
     for mut s in [session(), blind()] {

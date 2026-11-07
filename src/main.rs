@@ -15,7 +15,9 @@ use songngu::engine::{Config, Engine, Lang, View};
 use songngu::syllable::split_tone;
 use songngu::typing::{scored_words, Habits, Typist, Unit, BS, SKIP};
 
-const VALUE_OPTS: [&str; 24] = [
+const VALUE_OPTS: [&str; 26] = [
+    "--bs-ratio",
+    "--look-min",
     "--late-penalty",
     "--late-d-penalty",
     "--typos",
@@ -160,10 +162,11 @@ fn main() {
             let margin = arg(&args, "--look-margin").map_or(1e4, |v| v.parse().unwrap());
             let blind = args.iter().any(|a| a == "--blind");
             let bs_ratio = arg(&args, "--bs-ratio").map(|v| v.parse().unwrap());
+            let look_min = arg(&args, "--look-min").map(|v| v.parse().unwrap());
             let dump = (arg(&args, "--dump"), arg(&args, "--dump-want"));
             let show = arg(&args, "--show").map_or(0, |v| v.parse().unwrap());
             let mut t = typist(&args);
-            let opts = (unsure, look, blind, margin, bs_ratio);
+            let opts = (unsure, look, blind, margin, bs_ratio, look_min);
             session_eval(eng, &pos[1], &mut t, opts, show, (dump.0.as_deref(), dump.1.as_deref()))
         }
         Some("score") => score_cmd(&pos[1], &pos[2], arg(&args, "--show").map_or(0, |v| v.parse().unwrap())),
@@ -300,7 +303,7 @@ fn session_eval(
     eng: Engine,
     path: &str,
     typist: &mut Typist,
-    opts: (f64, f64, bool, f64, Option<f64>),
+    opts: (f64, f64, bool, f64, Option<f64>, Option<f64>),
     mut show: usize,
     dump: (Option<&str>, Option<&str>),
 ) {
@@ -319,6 +322,9 @@ fn session_eval(
     let (mut wrong_at_commit, mut bs_fixable) = (0usize, 0usize);
     if let Some(r) = opts.4 {
         s.backspace_ratio = r;
+    }
+    if let Some(v) = opts.5 {
+        s.lookahead_min_followers = v;
     }
     // Áp một Action lên dòng đang gõ như app thật (xoá rồi chèn trước con trỏ, Backspace đi thẳng vào app).
     let press = |s: &mut Session, doc: &mut String, ev: Event| {
