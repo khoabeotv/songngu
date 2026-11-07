@@ -71,7 +71,7 @@ static BOOL writePDF(NSString *path) {
 static BOOL writePreview(NSString *path) {
     size_t w = 560, h = 300;
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-    CGContextRef c = CGBitmapContextCreate(NULL, w, h, 8, 0, cs, kCGImageAlphaPremultipliedLast);
+    CGContextRef c = CGBitmapContextCreate(NULL, w, h, 8, 0, cs, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
     for (int i = 0; i < 2; i++) {
         CGFloat x = 280 * i;
         CGFloat bg = i ? 0.93 : 0.15, fg = i ? 0.1 : 1;
@@ -80,7 +80,7 @@ static BOOL writePreview(NSString *path) {
         CGColorRef col = CGColorCreateGenericGray(fg, 1);
         fillIcon(c, CGRectMake(x + 40, 110, 200, 160), col);
         // cỡ thật: 40×32 điểm ảnh, phóng 2 lần
-        CGContextRef small = CGBitmapContextCreate(NULL, 40, 32, 8, 0, cs, kCGImageAlphaPremultipliedLast);
+        CGContextRef small = CGBitmapContextCreate(NULL, 40, 32, 8, 0, cs, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
         fillIcon(small, CGRectMake(0, 0, 40, 32), col);
         CGImageRef img = CGBitmapContextCreateImage(small);
         CGContextSetInterpolationQuality(c, kCGInterpolationNone);

@@ -2,6 +2,7 @@
 // build: clang -Iplatform/macos platform/macos/smoke.c target/release/libsongngu.a -o target/smoke
 // usage: target/smoke target/Songngu.app/Contents/Resources "phím"   (< Backspace, ~ Esc, ^ Shift+Esc, | Enter)
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "songngu.h"
 
@@ -12,6 +13,7 @@ int main(int argc, char **argv) {
     snprintf(model, sizeof model, "%s/model.bin", argv[1]);
     SnHandle *h = sn_create(data, model, NULL, NULL, NULL);
     if (!h) { fprintf(stderr, "sn_create failed\n"); return 1; }
+    if (getenv("SN_APP")) sn_set_app(h, getenv("SN_APP"));  // ví dụ SN_APP=dev.herdr.app: áp cài đặt của app đó
     char doc[4096] = "";
     for (const char *p = argv[2]; *p; p++) {
         uint32_t kind = *p == '<' ? SN_BACKSPACE : *p == '~' ? SN_ESCAPE : *p == '^' ? SN_FLIP : *p == '|' ? SN_OTHER : SN_CHAR;
@@ -28,6 +30,7 @@ int main(int argc, char **argv) {
             do { n--; } while (n > 0 && ((unsigned char)doc[n] & 0xC0) == 0x80);
             doc[n] = 0;
         }
+        if (a.pass && kind == SN_OTHER) strncat(doc, "\n", sizeof doc - strlen(doc) - 1);  // `|` coi như Enter
         printf("%c  app=[%s]%s%s\n", *p, doc, a.erase ? "  replace" : "", a.pass ? "  pass" : "");
     }
     return 0;

@@ -71,6 +71,8 @@ target/bench target/Songngu.app/Contents/Resources f.keys [--paced 10 10] [--idl
 
 `build.sh` đóng `models/model.bin` vào app (chưa có thì tải từ release, không được thì dựng từ corpus); không có thì bộ gõ chạy không ngữ cảnh.
 
+Cửa sổ cài đặt (SwiftUI) cần SDK macOS 26 trở lên mới có giao diện Liquid Glass: `build.sh` dùng Xcode trong `/Applications` nếu có (hoặc `SONGNGU_DEVELOPER_DIR`), không có thì Command Line Tools và cửa sổ ra kiểu cũ. Command Line Tools 16 (Swift 6.0) có lỗi `redefinition of module 'SwiftBridging'`; sửa bằng `sudo mv /Library/Developer/CommandLineTools/usr/include/swift/module.modulemap{,.bak}`.
+
 ## Cấu trúc repo
 
 | Thư mục | Nội dung |

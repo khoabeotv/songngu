@@ -4,7 +4,7 @@ Bộ gõ song ngữ Việt/Anh cho macOS, không có chế độ Anh/Việt: c�
 
 ## Cài đặt
 
-Cần macOS 12 trở lên, Xcode Command Line Tools (`xcode-select --install`) và Rust (`curl https://sh.rustup.rs -sSf | sh`).
+Cần macOS 13 trở lên, Xcode Command Line Tools (`xcode-select --install`) và Rust (`curl https://sh.rustup.rs -sSf | sh`). Cửa sổ cài đặt có giao diện macOS 26 (Liquid Glass) khi máy có Xcode 26 trở lên; chỉ có Command Line Tools thì ra kiểu cũ.
 
 1. Build và cài:
 
