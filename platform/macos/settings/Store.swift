@@ -3,6 +3,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 enum Page: String, CaseIterable, Identifiable {
     case typing, apps, learned, status
@@ -81,6 +82,9 @@ final class Store: ObservableObject {
     @Published var learned: [LearnedWord] = []
     @Published var status = Status()
     @Published var error: String?
+    /// Lần kiểm tra cập nhật gần nhất (update.tsv), và đang kiểm tra/cài.
+    @Published var updateInfo = ""
+    @Published var checking = false
 
     private var stamps: [Date?] = [nil, nil, nil]
     private var timer: Timer?
@@ -148,6 +152,10 @@ final class Store: ObservableObject {
         }
         self.status = status
         stamps = now
+        updateInfo = Updater.lastCheck().map { last in
+            let when = last.date.formatted(date: .abbreviated, time: .shortened)
+            return "Kiểm tra lúc \(when): \(last.result)"
+        } ?? "Chưa kiểm tra lần nào"
     }
 
     private func readStatus() -> Status {
@@ -170,6 +178,26 @@ final class Store: ObservableObject {
 
     func toggle(_ key: String) {
         done(sn_cfg_toggle_option(settingsPath, key), "settings.tsv")
+        // báo khi đã tự cập nhật xong: xin quyền thông báo lúc người dùng bật
+        if key == "auto_update" && options[key] == true {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
+        }
+    }
+
+    /// Kiểm tra và cài ngay nếu có bản mới; cài xong thì mở lại cửa sổ từ bản mới.
+    func checkUpdate() {
+        checking = true
+        Task {
+            let result = await Updater.checkAndInstall()
+            checking = false
+            reload(force: true)
+            guard result.hasPrefix("Đã cập nhật") else { return }
+            let cfg = NSWorkspace.OpenConfiguration()
+            cfg.createsNewApplicationInstance = true
+            NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: cfg) { _, _ in
+                DispatchQueue.main.async { NSApp.terminate(nil) }
+            }
+        }
     }
 
     func remove(_ list: String, _ bundle: String) {
@@ -242,5 +270,7 @@ struct Options: Identifiable {
                                    desc: "Không tự chặn phím ở app không đưa phím qua bộ gõ (terminal kiểu gpui, vài app Flutter)")
     static let log = Options(key: "log", title: "Ghi nhật ký gõ",
                              desc: "Ghi phím và chữ ra typing-log.tsv trên máy này để báo lỗi; không ghi trong ô mật khẩu")
-    static let all = style + [flip, manualTap, log]
+    static let autoUpdate = Options(key: "auto_update", title: "Tự động cập nhật",
+                                    desc: "Mỗi ngày kiểm tra một lần; có bản mới thì tải về, kiểm chữ ký rồi cài.")
+    static let all = style + [flip, manualTap, log, autoUpdate]
 }

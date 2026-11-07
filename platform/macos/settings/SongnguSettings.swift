@@ -4,6 +4,17 @@ import AppKit
 import SwiftUI
 
 @main
+enum Main {
+    static func main() {
+        let args = CommandLine.arguments
+        // bộ gõ gọi chạy ngầm để tự cập nhật (Updater.swift): không mở cửa sổ
+        if args.contains("--update") {
+            exit(Updater.runHeadless(force: args.contains("--force")))
+        }
+        SongnguSettingsApp.main()
+    }
+}
+
 struct SongnguSettingsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var store = Store()

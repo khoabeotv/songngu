@@ -7,6 +7,18 @@
 
 static IMKServer *gServer;
 
+// Tự cập nhật (tuỳ chọn auto_update): bộ gõ không truy cập mạng, chỉ gọi cửa sổ cài đặt chạy ngầm; cửa sổ tự giới hạn
+// mỗi ngày một lần và tự thay Songngu.app (settings/Updater.swift).
+static void checkUpdate(void) {
+    SnHandle *h = songnguEngine();
+    if (!h) return;
+    sn_reload(h);
+    if (!sn_option_get(h, "auto_update")) return;
+    NSURL *exe = [NSBundle.mainBundle.bundleURL
+        URLByAppendingPathComponent:@"Contents/Helpers/SongnguSettings.app/Contents/MacOS/SongnguSettings"];
+    [NSTask launchedTaskWithExecutableURL:exe arguments:@[ @"--update" ] error:nil terminationHandler:nil];
+}
+
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         NSBundle *bundle = [NSBundle mainBundle];
@@ -24,6 +36,8 @@ int main(int argc, const char *argv[]) {
         gServer = [[IMKServer alloc] initWithName:conn bundleIdentifier:bundle.bundleIdentifier];
         songnguLoad();
         keyTapStart();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ checkUpdate(); });
+        [NSTimer scheduledTimerWithTimeInterval:3600 repeats:YES block:^(NSTimer *t) { checkUpdate(); }];
         [[NSApplication sharedApplication] run];
     }
     return 0;

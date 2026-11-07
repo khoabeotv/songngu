@@ -5,7 +5,8 @@
 //!                              `auto`: bộ gõ tự ghi khi kiểm tra thất bại (cửa sổ cài đặt tách riêng để gỡ nếu nhầm);
 //!                              không có: người dùng chọn. Dòng `marked` của bản cũ đọc như `tap`.
 //!   option<TAB>tên<TAB>0|1     classic_tone, vni, brackets, log, esc_flip (lật bằng Esc thay cho Backspace),
-//!                              manual_tap (chỉ chặn phím ở app trong danh sách, không tự chặn ở app không nhận bộ gõ)
+//!                              manual_tap (chỉ chặn phím ở app trong danh sách, không tự chặn ở app không nhận bộ gõ),
+//!                              auto_update (cửa sổ cài đặt tự kiểm tra và cài bản mới mỗi ngày)
 
 use std::collections::BTreeSet;
 
@@ -53,7 +54,7 @@ pub fn builtin_tap() -> &'static [&'static str] {
     TAP_APPS
 }
 
-pub const OPTIONS: [&str; 6] = ["classic_tone", "vni", "brackets", "log", "esc_flip", "manual_tap"];
+pub const OPTIONS: [&str; 7] = ["classic_tone", "vni", "brackets", "log", "esc_flip", "manual_tap", "auto_update"];
 
 #[derive(Default)]
 pub struct Settings {

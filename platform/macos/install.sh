@@ -54,6 +54,22 @@ xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 register=$("$APP/Contents/MacOS/Songngu" --register 2>&1 || true)
 say "Đã cài Songngu $VERSION vào $APP"
 
+# Hỏi một lần (chưa có dòng auto_update trong settings.tsv). Không có terminal để hỏi thì để tắt.
+CFG="$HOME/Library/Application Support/Songngu/settings.tsv"
+if ! grep -q $'^option\tauto_update\t' "$CFG" 2>/dev/null; then
+  ans=n
+  if { exec 3</dev/tty; } 2>/dev/null; then
+    printf 'Tự động cập nhật khi có bản mới? Chỉ cửa sổ cài đặt kết nối GitHub, bộ gõ không truy cập mạng. [Y/n] '
+    read -r ans <&3 || ans=n
+    exec 3<&-
+    [[ -z "$ans" ]] && ans=y
+  fi
+  case "$ans" in [yY]*) v=1 ;; *) v=0 ;; esac
+  mkdir -p "$(dirname "$CFG")"
+  printf 'option\tauto_update\t%s\n' "$v" >> "$CFG"
+  say "Tự động cập nhật: $([[ $v == 1 ]] && echo bật || echo tắt) (đổi ở Cài đặt Songngu > Trạng thái)."
+fi
+
 others=$(pgrep -lf "XKey|EVKey|OpenKey|GoTiengViet|PHTV|Unikey" 2>/dev/null | grep -v "Input Methods/Songngu" || true)
 if [[ -n "$others" ]]; then
   say ""

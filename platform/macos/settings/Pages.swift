@@ -212,8 +212,20 @@ struct StatusPage: View {
                     Titled(title: "Chặn phím", desc: "Sửa chữ bằng Backspace giả, chạy khi có quyền Trợ năng.")
                 }
             }
+            Section {
+                OptionToggle(option: Options.autoUpdate)
+                LabeledContent {
+                    Button(store.checking ? "Đang kiểm tra…" : "Kiểm tra ngay") { store.checkUpdate() }
+                        .disabled(store.checking)
+                } label: {
+                    Titled(title: "Phiên bản \(store.version)", desc: store.updateInfo)
+                }
+            } header: {
+                Text("Cập nhật")
+            } footer: {
+                Text("Chỉ cửa sổ cài đặt kết nối GitHub để kiểm tra và tải bản mới; bộ gõ không truy cập mạng. Bản mới phải ký cùng chứng chỉ với bản đang cài.")
+            }
             Section("Thông tin") {
-                LabeledContent("Phiên bản", value: store.version)
                 LabeledContent("Mô hình ngữ cảnh", value: store.model)
                 LabeledContent {
                     Button("Mở trong Finder") { NSWorkspace.shared.open(store.dir) }
