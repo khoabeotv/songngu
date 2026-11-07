@@ -51,7 +51,7 @@ cargo run --release -- save-model models/model.bin \
 
 - Kỹ thuật ×1/×2/×3/×5 cho 354/351/351/353 từ sai trên dev, giữ ×2. Chat ×2, ×3, ×4 ngang nhau trên dev, giữ ×3.
 - Chỉ dùng nguồn có license cho phép phân phối dữ liệu dẫn xuất (`data.md`); nguồn mới phải ghi vào `data.md` và `NOTICE`.
-- Phát hành mô hình mới: `gh release create model-vN models/model.bin --title "Model vN" --notes "CC BY-SA 4.0, xem NOTICE"`, rồi đổi `MODEL_TAG` và `MODEL_SHA256` (`shasum -a 256 models/model.bin`) trong `build.sh` và commit. Máy khác xoá `models/model.bin` để build tải bản mới; file cục bộ khác checksum thì build vẫn dùng và báo.
+- Phát hành mô hình mới: `gh release create model-vN models/model.bin --latest=false --title "Model vN" --notes "CC BY-SA 4.0, xem NOTICE"` (`--latest=false` để link cài đặt `releases/latest` vẫn trỏ bản app), rồi đổi `MODEL_TAG` và `MODEL_SHA256` (`shasum -a 256 models/model.bin`) trong `build.sh` và commit. Máy khác xoá `models/model.bin` để build tải bản mới; file cục bộ khác checksum thì build vẫn dùng và báo.
 - Corpus giữ cả câu có âm tiết ngoài danh sách tần suất đã thử, kém hơn trên dev chat.
 - Sinh chat: `tools/data/gen_chat.workflow.js` chạy qua pi-subagents (Claude Haiku 4.5, tối đa 64 lượt mỗi lần chạy); `args.set` = `train` (`args.part` 0/1) hoặc `eval`, `args.batch` = lượt thứ mấy của chủ đề.
 
@@ -70,6 +70,8 @@ target/bench target/Songngu.app/Contents/Resources f.keys [--paced 10 10] [--idl
 ```
 
 `build.sh` đóng `models/model.bin` vào app (chưa có thì tải từ release, không được thì dựng từ corpus); không có thì bộ gõ chạy không ngữ cảnh.
+
+Phát hành bản build sẵn (cài bằng `install.sh` qua `curl`): tăng `version` trong `Cargo.toml`, commit và push, rồi `platform/macos/release.sh --publish` trên máy có chứng chỉ "Songngu Dev". Script chạy test, build, nén `Songngu-<phiên bản>.zip`, điền phiên bản và checksum vào `install.sh`, tạo release `v<phiên bản>` đánh dấu Latest. Bỏ `--publish` để chỉ đóng gói vào `target/dist/`; thử cài từ file đó bằng `SONGNGU_ZIP=target/dist/Songngu-<phiên bản>.zip bash target/dist/install.sh`. Cùng chứng chỉ thì người dùng cập nhật không phải cấp lại quyền Trợ năng.
 
 Cửa sổ cài đặt (SwiftUI) cần SDK macOS 26 trở lên mới có giao diện Liquid Glass: `build.sh` dùng Xcode trong `/Applications` nếu có (hoặc `SONGNGU_DEVELOPER_DIR`), không có thì Command Line Tools và cửa sổ ra kiểu cũ. Command Line Tools 16 (Swift 6.0) có lỗi `redefinition of module 'SwiftBridging'`; sửa bằng `sudo mv /Library/Developer/CommandLineTools/usr/include/swift/module.modulemap{,.bak}`.
 

@@ -4,25 +4,32 @@ Bộ gõ song ngữ Việt/Anh cho macOS, không có chế độ Anh/Việt: c�
 
 ## Cài đặt
 
-Cần macOS 13 trở lên, Xcode Command Line Tools (`xcode-select --install`) và Rust (`curl https://sh.rustup.rs -sSf | sh`). Cửa sổ cài đặt có giao diện macOS 26 (Liquid Glass) khi máy có Xcode 26 trở lên; chỉ có Command Line Tools thì ra kiểu cũ.
+Cần macOS 13 trở lên (Apple Silicon hoặc Intel).
 
-1. Build và cài:
+**Cài nhanh** (bản build sẵn, dùng cả để cập nhật): dán vào Terminal
 
-   ```sh
-   platform/macos/build.sh --install
-   ```
+```sh
+curl -fsSL https://github.com/khoabeotv/songngu/releases/latest/download/install.sh | bash
+```
 
-   Lần đầu build tự tải mô hình ngữ cảnh (22 MB) từ mục Releases của repo về `models/model.bin` rồi đóng vào app. Repo private thì cần đăng nhập GitHub CLI trước (`brew install gh && gh auth login`). Không tải được thì bộ gõ vẫn chạy nhưng đoán kém hơn.
+Script chép Songngu vào `~/Library/Input Methods` (không cần sudo) rồi in các bước còn lại. Đừng tải file zip bằng trình duyệt: bản phát hành chưa notarize, macOS sẽ chặn bộ gõ.
 
-2. Bật: System Settings > Keyboard > Text Input > Edit > **+** > Vietnamese > **Songngu**. Biểu tượng **SN** hiện trên thanh menu; Ctrl+Space đổi qua lại với ABC.
+Sau khi cài (macOS bắt người dùng tự làm):
 
-3. Gõ trong terminal (Ghostty, Terminal, iTerm2...) cần quyền Trợ năng: System Settings > Privacy & Security > Accessibility, thêm `~/Library/Input Methods/Songngu.app` (kéo thả từ Finder, hoặc menu SN > "Cấp quyền Trợ năng…") rồi bật.
+1. Bật: System Settings > Keyboard > Text Input > Edit > **+** > Vietnamese > **Songngu**. Biểu tượng **SN** hiện trên thanh menu; Ctrl+Space đổi qua lại với ABC.
+2. Gõ trong terminal (Ghostty, Terminal, iTerm2...) cần quyền Trợ năng: System Settings > Privacy & Security > Accessibility, bật Songngu (menu SN > "Cấp quyền Trợ năng…" nếu chưa có trong danh sách).
 
-   Mỗi lần build lại, quyền này mất hiệu lực, trừ khi có chứng chỉ ký mã tên **Songngu Dev**: Keychain Access > Certificate Assistant > Create a Certificate, Identity Type "Self Signed Root", Certificate Type "Code Signing". Có chứng chỉ thì `build.sh` tự ký bằng nó và quyền giữ nguyên qua các lần cập nhật.
+**Gỡ**: cùng lệnh trên với `| bash -s -- --uninstall`, rồi bỏ Songngu khỏi danh sách Text Input. Dữ liệu đã học nằm ở `~/Library/Application Support/Songngu`.
 
-**Cập nhật**: `git pull` rồi chạy lại `platform/macos/build.sh --install`, chuyển sang ABC rồi quay lại Songngu.
+**Build từ mã nguồn**: cần thêm Xcode Command Line Tools (`xcode-select --install`) và Rust (`curl https://sh.rustup.rs -sSf | sh`). Cửa sổ cài đặt có giao diện macOS 26 (Liquid Glass) khi máy có Xcode 26 trở lên; chỉ có Command Line Tools thì ra kiểu cũ.
 
-**Gỡ**: bỏ Songngu khỏi danh sách Text Input, xoá `~/Library/Input Methods/Songngu.app` và `~/Library/Application Support/Songngu`.
+```sh
+platform/macos/build.sh --install
+```
+
+- Lần đầu build tự tải mô hình ngữ cảnh (22 MB) từ mục Releases về `models/model.bin` rồi đóng vào app. Repo private thì cần đăng nhập GitHub CLI trước (`brew install gh && gh auth login`). Không tải được thì bộ gõ vẫn chạy nhưng đoán kém hơn.
+- Mỗi lần build lại, quyền Trợ năng mất hiệu lực, trừ khi có chứng chỉ ký mã tên **Songngu Dev**: Keychain Access > Certificate Assistant > Create a Certificate, Identity Type "Self Signed Root", Certificate Type "Code Signing". Có chứng chỉ thì `build.sh` tự ký bằng nó và quyền giữ nguyên qua các lần cập nhật.
+- Cập nhật: `git pull` rồi chạy lại `build.sh --install`, chuyển sang ABC rồi quay lại Songngu.
 
 ## Sử dụng
 

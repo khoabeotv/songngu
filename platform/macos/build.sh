@@ -25,6 +25,13 @@ SETTINGS_APP=$APP/Contents/Helpers/SongnguSettings.app
 rm -rf $APP
 mkdir -p $APP/Contents/MacOS $APP/Contents/Resources/data $SETTINGS_APP/Contents/MacOS
 cp platform/macos/Info.plist $APP/Contents/
+# Phiên bản: lấy từ Cargo.toml (một chỗ duy nhất, release.sh gắn tag v<phiên bản>); số build tăng theo số commit.
+VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+set_version() {
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD" "$1"
+}
+set_version $APP/Contents/Info.plist
 cp data/vi_50k.txt data/vi_extra.txt data/en_words.txt data/en_dev.txt $APP/Contents/Resources/data/
 cp NOTICE LICENSE $APP/Contents/Resources/
 
@@ -43,6 +50,7 @@ for a in $SWIFT_ARCHS; do
 done
 lipo -create $SWIFT_OUT -output $SETTINGS_APP/Contents/MacOS/SongnguSettings
 cp platform/macos/SettingsInfo.plist $SETTINGS_APP/Contents/Info.plist
+set_version $SETTINGS_APP/Contents/Info.plist
 # phiên bản hiện ở trang Trạng thái
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)$(git diff --quiet HEAD 2>/dev/null || echo +)"
 /usr/libexec/PlistBuddy -c "Add :SongnguCommit string $COMMIT" $SETTINGS_APP/Contents/Info.plist
