@@ -1,0 +1,50 @@
+# Mỗi lần push/PR: test engine, build bộ gõ + cửa sổ cài đặt (ký ad-hoc), thử install.sh với locale C (lỗi tên biến
+# dính ký tự không phải ASCII chỉ hiện khi chạy qua `curl | bash` ở máy không đặt locale UTF-8).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Test engine
+        run: cargo test --release
+
+      - name: Build input method and settings window
+        run: platform/macos/build.sh
+
+      - name: Install script (locale C, fake HOME)
+        env:
+          LC_ALL: C
+        run: |
+          bash -n platform/macos/install.sh
+          zip="$RUNNER_TEMP/Songngu-0.0.0.zip"
+          ditto -c -k --keepParent target/Songngu.app "$zip"
+          sum=$(shasum -a 256 "$zip" | cut -d' ' -f1)
+          sed -e "s/@VERSION@/0.0.0/" -e "s/@SHA256@/$sum/" platform/macos/install.sh > "$RUNNER_TEMP/install.sh"
+          home="$RUNNER_TEMP/home"
+          mkdir -p "$home"
+          HOME="$home" SONGNGU_ZIP="$zip" bash "$RUNNER_TEMP/install.sh" </dev/null
+          test -x "$home/Library/Input Methods/Songngu.app/Contents/MacOS/Songngu"
+          HOME="$home" bash "$RUNNER_TEMP/install.sh" --uninstall
+          test ! -e "$home/Library/Input Methods/Songngu.app"
