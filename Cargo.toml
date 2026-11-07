@@ -1,6 +1,6 @@
 [package]
 name = "songngu"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Bộ gõ song ngữ Việt/Anh: quyết định ngôn ngữ theo từng phím"
 
