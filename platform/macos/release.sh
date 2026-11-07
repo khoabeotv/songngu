@@ -22,6 +22,9 @@ if (( PUBLISH )); then
 fi
 
 cargo test --release -q >/dev/null 2>&1 || { echo "test hỏng: cargo test --release" >&2; exit 1; }
+# Rust ghi đường dẫn mã nguồn thư viện (có tên tài khoản máy build) vào thông báo lỗi trong binary: đổi $HOME thành ~.
+# Chỉ đặt ở đây vì đổi RUSTFLAGS làm cargo build lại toàn bộ.
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=~"
 platform/macos/build.sh
 APP=target/Songngu.app
 codesign -dr - $APP 2>&1 | grep -q "certificate leaf" || { echo "app không ký bằng chứng chỉ" >&2; exit 1; }

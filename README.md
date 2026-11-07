@@ -29,7 +29,7 @@ Sau khi cài (macOS bắt người dùng tự làm):
 platform/macos/build.sh --install
 ```
 
-- Lần đầu build tự tải mô hình ngữ cảnh (22 MB) từ mục Releases về `models/model.bin` rồi đóng vào app. Repo private thì cần đăng nhập GitHub CLI trước (`brew install gh && gh auth login`). Không tải được thì bộ gõ vẫn chạy nhưng đoán kém hơn.
+- Lần đầu build tự tải mô hình ngữ cảnh (22 MB) từ mục Releases về `models/model.bin` rồi đóng vào app. Không tải được thì bộ gõ vẫn chạy nhưng đoán kém hơn.
 - Mỗi lần build lại, quyền Trợ năng mất hiệu lực, trừ khi có chứng chỉ ký mã tên **Songngu Dev**: Keychain Access > Certificate Assistant > Create a Certificate, Identity Type "Self Signed Root", Certificate Type "Code Signing". Có chứng chỉ thì `build.sh` tự ký bằng nó và quyền giữ nguyên qua các lần cập nhật.
 - Cập nhật: `git pull` rồi chạy lại `build.sh --install`, chuyển sang ABC rồi quay lại Songngu.
 

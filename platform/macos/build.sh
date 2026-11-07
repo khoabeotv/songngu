@@ -56,7 +56,7 @@ COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)$(git diff --quiet HEAD
 /usr/libexec/PlistBuddy -c "Add :SongnguCommit string $COMMIT" $SETTINGS_APP/Contents/Info.plist
 
 # Mô hình ngữ cảnh: file đính kèm của release MODEL_TAG, không commit (mỗi bản dựng lại khác gần hết file cũ, lịch sử
-# git sẽ nặng thêm ~7 MB mỗi lần). Thiếu thì tải (gh nếu có, repo private cần `gh auth login`), rồi mới dựng từ corpus/.
+# git sẽ nặng thêm ~7 MB mỗi lần). Thiếu thì tải (gh nếu có, không thì curl), rồi mới dựng từ corpus/.
 # Phát hành mô hình mới: docs/development.md.
 MODEL=models/model.bin
 MODEL_TAG=model-v1
