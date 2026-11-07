@@ -37,7 +37,7 @@ trap 'rm -rf "$tmp"' EXIT
 if [[ -n "${SONGNGU_ZIP:-}" ]]; then
   cp "$SONGNGU_ZIP" "$tmp/Songngu.zip"
 else
-  say "Tải Songngu $VERSION…"
+  say "Tải Songngu ${VERSION}…"
   curl -fL --progress-bar -o "$tmp/Songngu.zip" "$URL" || fail "không tải được $URL"
 fi
 echo "$SHA256  $tmp/Songngu.zip" | shasum -a 256 -c - >/dev/null 2>&1 || fail "file tải về sai checksum, thử lại sau."
