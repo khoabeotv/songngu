@@ -70,12 +70,22 @@ if ! grep -q $'^option\tauto_update\t' "$CFG" 2>/dev/null; then
   say "Tự động cập nhật: $([[ $v == 1 ]] && echo bật || echo tắt) (đổi ở Cài đặt Songngu > Trạng thái)."
 fi
 
-others=$(pgrep -lf "XKey|EVKey|OpenKey|GoTiengViet|PHTV|Unikey" 2>/dev/null | grep -v "Input Methods/Songngu" || true)
-if [[ -n "$others" ]]; then
+# Bộ gõ chạy nền bắt phím (danh sách trong conflicts.tsv của app vừa cài): chỉ cảnh báo, không tự tắt hay gỡ.
+running_ids=$(lsappinfo list 2>/dev/null | sed -n 's/.*bundleID="\([^"]*\)".*/\1/p')
+found=()
+while IFS=$'\t' read -r id name proc; do
+  [[ -z "$id" || "$id" == \#* ]] && continue
+  if grep -qxF "$id" <<<"$running_ids" || pgrep -xq "$proc" 2>/dev/null; then found+=("$name"); fi
+done < "$APP/Contents/Resources/conflicts.tsv"
+if (( ${#found[@]} )); then
   say ""
-  say "Cảnh báo: đang có bộ gõ khác chạy, sẽ tranh phím với Songngu (Ctrl+Space không đổi được bộ gõ, app không nhận"
-  say "bộ gõ). Thoát nó và gỡ khỏi System Settings > General > Login Items:"
-  say "$others"
+  say "Cảnh báo: ${found[*]} đang chạy. Bộ gõ này bắt phím toàn hệ thống nên chạy cùng Songngu sẽ ra dấu đôi, mất hoặc"
+  say "nhảy chữ. Cách tắt (Songngu không tự làm):"
+  say "  1. Thoát nó: biểu tượng của nó trên thanh menu > Thoát (Quit)."
+  say "  2. Không cho mở cùng máy: System Settings > General > Login Items & Extensions, và tuỳ chọn mở cùng máy trong"
+  say "     cài đặt của nó."
+  say "  3. Thu quyền: System Settings > Privacy & Security > Accessibility, tắt nó."
+  say "Bộ gõ nằm trong Input Sources (Telex của macOS, XKeyIM...) thì không xung đột."
 fi
 
 say ""

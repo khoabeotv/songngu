@@ -33,7 +33,7 @@ set_version() {
 }
 set_version $APP/Contents/Info.plist
 cp data/vi_50k.txt data/vi_extra.txt data/en_words.txt data/en_dev.txt $APP/Contents/Resources/data/
-cp NOTICE LICENSE $APP/Contents/Resources/
+cp NOTICE LICENSE platform/macos/conflicts.tsv $APP/Contents/Resources/
 
 # Cửa sổ cài đặt: giao diện macOS 26 (Liquid Glass) chỉ có khi build bằng SDK macOS 26 trở lên, nên ưu tiên Xcode trong
 # /Applications (hoặc SONGNGU_DEVELOPER_DIR); không có thì Command Line Tools, cửa sổ ra kiểu cũ. Không đổi

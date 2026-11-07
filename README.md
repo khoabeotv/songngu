@@ -19,6 +19,8 @@ Sau khi cài (macOS bắt người dùng tự làm):
 1. Bật: System Settings > Keyboard > Text Input > Edit > **+** > Vietnamese > **Songngu**. Biểu tượng **SN** hiện trên thanh menu; Ctrl+Space đổi qua lại với ABC.
 2. Gõ trong terminal (Ghostty, Terminal, iTerm2...) cần quyền Trợ năng: System Settings > Privacy & Security > Accessibility, bật Songngu (menu SN > "Cấp quyền Trợ năng…" nếu chưa có trong danh sách).
 
+**Bộ gõ khác**: bộ gõ chạy nền bắt phím qua event tap và quyền Trợ năng (OpenKey, EVKey, GoTiengViet, PHTV, app XKey...) xung đột với Songngu: dấu đôi, mất hoặc nhảy chữ, Ctrl+Space không đổi được bộ gõ. Thoát app đó, tắt mở cùng máy (System Settings > General > Login Items & Extensions và cài đặt của chính nó), thu quyền ở Privacy & Security > Accessibility. `install.sh` và trang Trạng thái của cửa sổ cài đặt cảnh báo khi thấy chúng đang chạy (chỉ cảnh báo, không tự tắt). Bộ gõ nằm trong Input Sources (Telex có sẵn của macOS, XKeyIM...) không xung đột vì mỗi lúc chỉ một nguồn nhập được chọn; bỏ khỏi danh sách nếu muốn gọn.
+
 **Gỡ**: cùng lệnh trên với `| bash -s -- --uninstall`, rồi bỏ Songngu khỏi danh sách Text Input. Dữ liệu đã học nằm ở `~/Library/Application Support/Songngu`.
 
 **Build từ mã nguồn**: cần thêm Xcode Command Line Tools (`xcode-select --install`) và Rust (`curl https://sh.rustup.rs -sSf | sh`). Cửa sổ cài đặt có giao diện macOS 26 (Liquid Glass) khi máy có Xcode 26 trở lên; chỉ có Command Line Tools thì ra kiểu cũ.
@@ -66,7 +68,7 @@ platform/macos/build.sh --install
 | Gõ | Đặt dấu kiểu cũ (hòa, thủy); gõ VNI; `[ ]` gõ ơ ư; lật bằng Esc thay cho Backspace; chỉ chặn phím ở app trong danh sách (mặc định Songngu tự lo app không nhận bộ gõ, như XKey, đổi lại gõ chữ ở chỗ không có ô nhập như danh sách thư, Finder có thể sinh Backspace giả); ghi nhật ký gõ ra `typing-log.tsv` (để báo lỗi, không ghi trong ô mật khẩu) |
 | Ứng dụng | App bỏ qua và app chặn phím: thêm, gỡ. App "tự phát hiện" là bộ gõ tự thêm, gỡ nếu app vẫn gõ đúng |
 | Đã học | Các từ học được từ những lần lật và ngữ cảnh của chúng; quên từng từ hoặc tất cả (file cũ giữ ở `memory-forgotten.tsv`) |
-| Trạng thái | Bộ gõ có đang chạy, quyền Trợ năng; tự động cập nhật và kiểm tra cập nhật; phiên bản, mô hình, giấy phép |
+| Trạng thái | Bộ gõ có đang chạy, quyền Trợ năng, bộ gõ chạy nền khác đang xung đột; tự động cập nhật và kiểm tra cập nhật; phiên bản, mô hình, giấy phép |
 
 Sửa trong cửa sổ có hiệu lực ngay ở phím gõ tiếp theo.
 
@@ -77,7 +79,7 @@ File người dùng nằm trong `~/Library/Application Support/Songngu/`: `memor
 | Hiện tượng | Cách xử lý |
 |---|---|
 | Không thấy biểu tượng SN | System Settings > Menu Bar: bật mục Text Input/bộ gõ; thanh menu nhiều icon thì có thể bị tai thỏ che |
-| Ctrl+Space không đổi bộ gõ, app không nhận bộ gõ | Đang chạy bộ gõ chặn phím khác (XKey, EVKey...): thoát nó và gỡ khỏi Login Items |
+| Ctrl+Space không đổi bộ gõ, app không nhận bộ gõ, dấu đôi, nhảy chữ | Đang chạy bộ gõ chặn phím khác (xem **Bộ gõ khác** ở phần cài đặt; Cài đặt > Trạng thái báo tên app) |
 | Terminal không ra dấu | Chưa có quyền Trợ năng (bước 3 phần cài đặt) |
 | Một app (terminal lạ) hoàn toàn không ra tiếng Việt, thanh menu hiện A | App không đưa phím qua bộ gõ; Songngu tự chặn phím ở đó khi có quyền Trợ năng. Đã bật "Chỉ chặn phím ở app trong danh sách" thì thêm app ở Cài đặt > Ứng dụng > Chặn phím |
 | Một app gõ ra chữ lặp hoặc sai | Menu SN > "Chặn phím ở app này" khi đang ở app đó |

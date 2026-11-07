@@ -213,6 +213,31 @@ struct StatusPage: View {
                 }
             }
             Section {
+                if store.conflicts.isEmpty {
+                    Label("Không thấy bộ gõ chạy nền nào khác", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                }
+                ForEach(store.conflicts) { c in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("\(c.name) đang chạy", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.body.weight(.semibold))
+                        Text("\(c.name) bắt phím toàn hệ thống nên chạy cùng Songngu sẽ ra dấu đôi, mất hoặc nhảy chữ. Thoát \(c.name) (biểu tượng của nó trên thanh menu > Thoát), bỏ nó khỏi danh sách mở cùng máy, và tắt nó trong quyền Trợ năng.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack {
+                            Button("Mở Login Items") { store.openLoginItems() }
+                            Button("Mở Trợ năng") { store.openAccessibility() }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            } header: {
+                Text("Bộ gõ khác")
+            } footer: {
+                Text("Songngu chỉ cảnh báo, không tự tắt hay gỡ app nào. Bộ gõ nằm trong Input Sources (Telex có sẵn của macOS, XKeyIM...) không xung đột vì mỗi lúc chỉ một nguồn nhập được chọn.")
+            }
+            Section {
                 OptionToggle(option: Options.autoUpdate)
                 LabeledContent {
                     Button(store.checking ? "Đang kiểm tra…" : "Kiểm tra ngay") { store.checkUpdate() }

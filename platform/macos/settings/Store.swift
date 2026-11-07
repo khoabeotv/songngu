@@ -59,6 +59,32 @@ struct LearnedWord: Identifiable {
     var id: String { key }
 }
 
+/// Bộ gõ chạy nền bắt phím (conflicts.tsv trong Resources): chạy cùng Songngu thì cả hai cùng sửa phím.
+struct Conflict: Identifiable {
+    let bundle: String
+    let name: String
+    let process: String
+    var id: String { bundle }
+
+    static func load(_ resources: URL?) -> [Conflict] {
+        guard let r = resources,
+              let text = try? String(contentsOf: r.appendingPathComponent("conflicts.tsv"), encoding: .utf8) else { return [] }
+        return text.split(separator: "\n").compactMap { line in
+            guard !line.hasPrefix("#") else { return nil }
+            let f = line.split(separator: "\t").map(String.init)
+            return f.count == 3 ? Conflict(bundle: f[0], name: f[1], process: f[2]) : nil
+        }
+    }
+
+    /// Các bộ gõ trong danh sách đang chạy (theo bundle id, hoặc tên tiến trình nếu bản khác đổi bundle id).
+    static func running(_ known: [Conflict]) -> [Conflict] {
+        let apps = NSWorkspace.shared.runningApplications
+        let ids = Set(apps.compactMap(\.bundleIdentifier))
+        let procs = Set(apps.compactMap { $0.executableURL?.lastPathComponent })
+        return known.filter { ids.contains($0.bundle) || procs.contains($0.process) }
+    }
+}
+
 struct Status {
     var running = false
     var accessibility = false
@@ -82,6 +108,9 @@ final class Store: ObservableObject {
     @Published var learned: [LearnedWord] = []
     @Published var status = Status()
     @Published var error: String?
+    /// Bộ gõ chạy nền khác đang chạy (chỉ cảnh báo, không tự tắt).
+    @Published var conflicts: [Conflict] = []
+    private var knownConflicts: [Conflict] = []
     /// Lần kiểm tra cập nhật gần nhất (update.tsv), và đang kiểm tra/cài.
     @Published var updateInfo = ""
     @Published var checking = false
@@ -98,6 +127,7 @@ final class Store: ObservableObject {
         var url = Bundle.main.bundleURL
         while url.path != "/" && url.lastPathComponent != "Songngu.app" { url.deleteLastPathComponent() }
         resources = url.lastPathComponent == "Songngu.app" ? url.appendingPathComponent("Contents/Resources") : nil
+        knownConflicts = Conflict.load(resources)
         reload(force: true)
         // bộ gõ hoặc menu SN có thể sửa file trong lúc cửa sổ đang mở
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -129,6 +159,8 @@ final class Store: ObservableObject {
     func reload(force: Bool) {
         let now = [Store.mtime(settingsPath), Store.mtime(memoryPath), Store.mtime(statusURL.path)]
         let status = readStatus()
+        let running = Conflict.running(knownConflicts)
+        if running.map(\.bundle) != conflicts.map(\.bundle) { conflicts = running }
         if !force && now == stamps {
             // pid trong status.tsv có thể vừa tắt mà file không đổi
             if status.running != self.status.running { self.status = status }
@@ -249,6 +281,10 @@ final class Store: ObservableObject {
 
     func openAccessibility() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+
+    func openLoginItems() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
     }
 }
 

@@ -1,0 +1,9 @@
+# Bộ gõ chạy nền bắt phím toàn hệ thống (event tap, cần quyền Trợ năng): chạy cùng Songngu thì cả hai cùng sửa phím
+# (dấu đôi, mất hoặc nhảy chữ). install.sh và trang Trạng thái của cửa sổ cài đặt cảnh báo khi thấy chúng đang chạy.
+# Bộ gõ InputMethodKit (nằm trong Input Sources, ví dụ XKeyIM) thì không cần: mỗi lúc chỉ một nguồn nhập được chọn.
+# bundle id<TAB>tên hiện<TAB>tên tiến trình. Lấy từ Info.plist bản phát hành; binary chính có CGEventTapCreate.
+com.tuyenmai.openkey	OpenKey	OpenKey
+com.lamquangminh.evkey	EVKey	EVKey
+com.trankynam.GoTiengViet	GoTiengViet	GoTiengViet
+com.codetay.XKey	XKey	XKey
+com.phamhungtien.phtv	PHTV	PHTV
