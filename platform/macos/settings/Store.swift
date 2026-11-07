@@ -2,15 +2,17 @@
 // settings.tsv/memory.tsv chỉ nằm một chỗ. Bộ gõ là tiến trình khác, tự nạp lại khi file đổi; status.tsv do bộ gõ ghi.
 import AppKit
 import SwiftUI
+import Carbon
 import UniformTypeIdentifiers
 import UserNotifications
 
 enum Page: String, CaseIterable, Identifiable {
-    case typing, apps, learned, status
+    case start, typing, apps, learned, status
     var id: Self { self }
 
     var title: String {
         switch self {
+        case .start: return "Bắt đầu"
         case .typing: return "Gõ"
         case .apps: return "Ứng dụng"
         case .learned: return "Đã học"
@@ -20,6 +22,7 @@ enum Page: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .start: return "checklist"
         case .typing: return "keyboard"
         case .apps: return "square.grid.2x2.fill"
         case .learned: return "brain.head.profile"
@@ -29,6 +32,7 @@ enum Page: String, CaseIterable, Identifiable {
 
     var tint: Color {
         switch self {
+        case .start: return .orange
         case .typing: return .gray
         case .apps: return .blue
         case .learned: return .pink
@@ -111,6 +115,8 @@ final class Store: ObservableObject {
     /// Bộ gõ chạy nền khác đang chạy (chỉ cảnh báo, không tự tắt).
     @Published var conflicts: [Conflict] = []
     private var knownConflicts: [Conflict] = []
+    /// Songngu đã có trong danh sách nguồn nhập (System Settings > Keyboard > Text Input).
+    @Published var enabled = false
     /// Lần kiểm tra cập nhật gần nhất (update.tsv), và đang kiểm tra/cài.
     @Published var updateInfo = ""
     @Published var checking = false
@@ -161,6 +167,8 @@ final class Store: ObservableObject {
         let status = readStatus()
         let running = Conflict.running(knownConflicts)
         if running.map(\.bundle) != conflicts.map(\.bundle) { conflicts = running }
+        let on = Store.inputSourceEnabled()
+        if on != enabled { enabled = on }
         if !force && now == stamps {
             // pid trong status.tsv có thể vừa tắt mà file không đổi
             if status.running != self.status.running { self.status = status }
@@ -188,6 +196,15 @@ final class Store: ObservableObject {
             let when = last.date.formatted(date: .abbreviated, time: .shortened)
             return "Kiểm tra lúc \(when): \(last.result)"
         } ?? "Chưa kiểm tra lần nào"
+    }
+
+    /// Các bước cài đặt mà macOS bắt người dùng tự làm đã xong (trang Bắt đầu).
+    var setupDone: Bool { enabled && status.running && status.accessibility && conflicts.isEmpty }
+
+    private static func inputSourceEnabled() -> Bool {
+        let filter = [kTISPropertyBundleID as String: "com.songngu.inputmethod.Songngu"] as CFDictionary
+        guard let list = TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource] else { return false }
+        return !list.isEmpty
     }
 
     private func readStatus() -> Status {
@@ -281,6 +298,16 @@ final class Store: ObservableObject {
 
     func openAccessibility() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+
+    func openTextInput() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+    }
+
+    /// Hiện Songngu.app trong Finder để kéo vào danh sách Trợ năng khi nó chưa có ở đó.
+    func revealApp() {
+        guard let app = resources?.deletingLastPathComponent().deletingLastPathComponent() else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([app])
     }
 
     func openLoginItems() {

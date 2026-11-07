@@ -270,3 +270,84 @@ struct StatusPage: View {
         .formStyle(.grouped)
     }
 }
+
+/// Một bước của trang Bắt đầu: số thứ tự (xong thì dấu tick), mô tả, nút làm bước đó khi chưa xong.
+struct Step<Actions: View>: View {
+    let number: Int
+    let done: Bool
+    /// Chưa biết được (cần bước trước xong).
+    var unknown = false
+    let title: String
+    let desc: String
+    @ViewBuilder let actions: () -> Actions
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: done ? "checkmark.circle.fill" : unknown ? "circle.dashed" : "\(number).circle")
+                .font(.title2)
+                .foregroundStyle(done ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.body.weight(.medium))
+                Text(desc)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !done {
+                    HStack { actions() }.padding(.top, 2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// Các bước macOS bắt người dùng tự làm sau khi cài; tự đánh dấu khi xong (kiểm mỗi giây).
+struct StartPage: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        let s = store.status
+        let others = store.conflicts.map(\.name).joined(separator: ", ")
+        Form {
+            Section {
+                Step(number: 1, done: store.enabled, title: "Thêm Songngu vào nguồn nhập",
+                     desc: "Keyboard > Text Input > Edit… > + > Vietnamese > Songngu > Add.") {
+                    Button("Mở cài đặt Bàn phím") { store.openTextInput() }
+                }
+                Step(number: 2, done: s.running, title: "Chọn SN",
+                     desc: "Bấm Ctrl+Space hoặc chọn SN ở biểu tượng nguồn nhập trên thanh menu, rồi gõ thử ở bất kỳ đâu.") {
+                    EmptyView()
+                }
+                Step(number: 3, done: s.accessibility, unknown: !s.running, title: "Cấp quyền Trợ năng",
+                     desc: s.running
+                        ? "Cần để gõ trong terminal và app không nhận bộ gõ. Privacy & Security > Accessibility: bật Songngu; chưa có trong danh sách thì kéo Songngu.app vào."
+                        : "Làm sau bước 2: lúc đó mới biết bộ gõ đã có quyền chưa.") {
+                    if s.running {
+                        Button("Mở cài đặt Trợ năng") { store.openAccessibility() }
+                        Button("Hiện Songngu.app") { store.revealApp() }
+                    }
+                }
+                Step(number: 4, done: store.conflicts.isEmpty, title: "Tắt bộ gõ chạy nền khác",
+                     desc: store.conflicts.isEmpty
+                        ? "Không thấy bộ gõ chạy nền nào khác."
+                        : "\(others) đang chạy, sẽ ra dấu đôi, mất hoặc nhảy chữ. Thoát nó, bỏ khỏi danh sách mở cùng máy và tắt nó trong quyền Trợ năng.") {
+                    Button("Mở Login Items") { store.openLoginItems() }
+                    Button("Mở cài đặt Trợ năng") { store.openAccessibility() }
+                }
+            } header: {
+                Text(store.setupDone ? "Đã sẵn sàng" : "Vài bước macOS bắt bạn tự làm")
+            } footer: {
+                Text("Các bước tự đánh dấu khi xong.")
+            }
+            if store.setupDone {
+                Section("Gõ thử") {
+                    LabeledContent("truowfng merge test cos", value: "trường merge test có")
+                    LabeledContent("Đoán sai", value: "Backspace ngay sau từ để lật")
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}

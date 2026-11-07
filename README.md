@@ -12,7 +12,7 @@ Cần macOS 13 trở lên (Apple Silicon hoặc Intel).
 curl -fsSL https://github.com/khoabeotv/songngu/releases/latest/download/install.sh | bash
 ```
 
-Script chép Songngu vào `~/Library/Input Methods` (không cần sudo), hỏi có bật tự động cập nhật không, rồi in các bước còn lại. Đừng tải file zip bằng trình duyệt: bản phát hành chưa notarize, macOS sẽ chặn bộ gõ.
+Script chép Songngu vào `~/Library/Input Methods` (không cần sudo), hỏi có bật tự động cập nhật không, rồi mở cửa sổ cài đặt ở trang hướng dẫn các bước còn lại. Đừng tải file zip bằng trình duyệt: bản phát hành chưa notarize, macOS sẽ chặn bộ gõ.
 
 Sau khi cài (macOS bắt người dùng tự làm):
 
@@ -65,6 +65,7 @@ platform/macos/build.sh --install
 
 | Trang | Nội dung |
 |---|---|
+| Bắt đầu | Các bước macOS bắt người dùng tự làm (thêm nguồn nhập, chọn SN, quyền Trợ năng, tắt bộ gõ chạy nền khác), mỗi bước có nút mở đúng chỗ và tự đánh dấu khi xong. Cửa sổ mở trang này khi còn bước chưa xong |
 | Gõ | Đặt dấu kiểu cũ (hòa, thủy); gõ VNI; `[ ]` gõ ơ ư; lật bằng Esc thay cho Backspace; chỉ chặn phím ở app trong danh sách (mặc định Songngu tự lo app không nhận bộ gõ, như XKey, đổi lại gõ chữ ở chỗ không có ô nhập như danh sách thư, Finder có thể sinh Backspace giả); ghi nhật ký gõ ra `typing-log.tsv` (để báo lỗi, không ghi trong ô mật khẩu) |
 | Ứng dụng | App bỏ qua và app chặn phím: thêm, gỡ. App "tự phát hiện" là bộ gõ tự thêm, gỡ nếu app vẫn gõ đúng |
 | Đã học | Các từ học được từ những lần lật và ngữ cảnh của chúng; quên từng từ hoặc tất cả (file cũ giữ ở `memory-forgotten.tsv`) |

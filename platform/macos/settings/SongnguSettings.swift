@@ -21,7 +21,8 @@ struct SongnguSettingsApp: App {
 
     var body: some Scene {
         Window("Cài đặt Songngu", id: "main") {
-            RootView(page: Capture.request?.page ?? .typing)
+            // chưa xong các bước cài đặt thì mở trang Bắt đầu
+            RootView(page: Capture.request?.page ?? (store.setupDone ? .typing : .start))
                 .environmentObject(store)
                 .frame(minWidth: 640, minHeight: 440)
         }
@@ -80,6 +81,7 @@ struct RootView: View {
                         .padding(.top, 10)
                 }
                 switch current {
+                case .start: StartPage()
                 case .typing: TypingPage()
                 case .apps: AppsPage()
                 case .learned: LearnedPage()

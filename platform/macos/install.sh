@@ -90,12 +90,12 @@ fi
 
 say ""
 if [[ "$register" == *"Chưa bật"* ]]; then
-  say "Bước tiếp theo (macOS bắt người dùng tự làm):"
-  say "  1. System Settings > Keyboard > Text Input > Edit > + > Vietnamese > Songngu > Add (đang mở sẵn)."
+  say "Còn vài bước macOS bắt người dùng tự làm; cửa sổ Cài đặt Songngu (trang Bắt đầu) hướng dẫn từng bước và tự đánh"
+  say "dấu khi xong:"
+  say "  1. System Settings > Keyboard > Text Input > Edit > + > Vietnamese > Songngu > Add."
   say "  2. Chọn SN trên thanh menu (Ctrl+Space để đổi qua lại với ABC)."
-  say "  3. Gõ trong terminal và vài app cần quyền Trợ năng: System Settings > Privacy & Security > Accessibility,"
-  say "     bật Songngu (menu SN > Cấp quyền Trợ năng… nếu chưa có trong danh sách)."
-  open "x-apple.systempreferences:com.apple.Keyboard-Settings.extension" 2>/dev/null || true
+  say "  3. Gõ trong terminal và vài app cần quyền Trợ năng: System Settings > Privacy & Security > Accessibility."
+  open "$APP/Contents/Helpers/SongnguSettings.app" 2>/dev/null || true
 else
   say "Songngu đã có trong danh sách nguồn nhập. Chuyển sang ABC rồi quay lại SN để dùng bản mới."
 fi
