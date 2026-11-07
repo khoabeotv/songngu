@@ -1,8 +1,9 @@
 //! Cài đặt bộ gõ (file TSV trong thư mục người dùng): app bỏ qua, app kiểu code, tuỳ chọn gõ.
 //!   exclude<TAB>bundle id      app bộ gõ đứng ngoài
 //!   code<TAB>bundle id         thêm app kiểu Terminal/IDE (Esc của app, nghiêng tiếng Anh)
-//!   tap<TAB>bundle id          app không thay chữ được hoặc không đưa phím qua bộ gõ (tự ghi khi kiểm tra thất bại, hoặc
-//!                              chọn trong menu): chặn phím và xoá bằng Backspace. Dòng `marked` của bản cũ đọc như `tap`.
+//!   tap<TAB>bundle id[<TAB>auto]  app không thay chữ được hoặc không đưa phím qua bộ gõ: chặn phím và xoá bằng Backspace.
+//!                              `auto`: bộ gõ tự ghi khi kiểm tra thất bại (cửa sổ cài đặt tách riêng để gỡ nếu nhầm);
+//!                              không có: người dùng chọn. Dòng `marked` của bản cũ đọc như `tap`.
 //!   option<TAB>tên<TAB>0|1     classic_tone, vni, brackets, log, esc_flip (lật bằng Esc thay cho Backspace),
 //!                              manual_tap (chỉ chặn phím ở app trong danh sách, không tự chặn ở app không nhận bộ gõ)
 
@@ -47,6 +48,11 @@ const TAP_APPS: &[&str] = &[
     "co.zeit.hyper",
 ];
 
+/// App có sẵn trong danh sách chặn phím (không gỡ được, cửa sổ cài đặt chỉ hiện).
+pub fn builtin_tap() -> &'static [&'static str] {
+    TAP_APPS
+}
+
 pub const OPTIONS: [&str; 6] = ["classic_tone", "vni", "brackets", "log", "esc_flip", "manual_tap"];
 
 #[derive(Default)]
@@ -54,6 +60,8 @@ pub struct Settings {
     pub exclude: BTreeSet<String>,
     pub code: BTreeSet<String>,
     pub tap: BTreeSet<String>,
+    /// Phần của `tap` do bộ gõ tự ghi.
+    pub tap_auto: BTreeSet<String>,
     pub options: BTreeSet<String>,
 }
 
@@ -70,6 +78,10 @@ impl Settings {
                 }
                 ["tap" | "marked", b] => {
                     s.tap.insert(b.to_string());
+                }
+                ["tap", b, "auto"] => {
+                    s.tap.insert(b.to_string());
+                    s.tap_auto.insert(b.to_string());
                 }
                 ["option", name, "1"] => {
                     s.options.insert(name.to_string());
@@ -89,7 +101,8 @@ impl Settings {
             out += &format!("code\t{b}\n");
         }
         for b in &self.tap {
-            out += &format!("tap\t{b}\n");
+            let auto = if self.tap_auto.contains(b) { "\tauto" } else { "" };
+            out += &format!("tap\t{b}{auto}\n");
         }
         for o in OPTIONS {
             out += &format!("option\t{o}\t{}\n", u8::from(self.options.contains(o)));
@@ -118,12 +131,20 @@ impl Settings {
         self.tap.contains(bundle) || TAP_APPS.contains(&bundle)
     }
 
-    /// Bật/tắt chặn phím ở app (menu). App có sẵn trong danh sách thì không tắt được.
+    /// Bật/tắt chặn phím ở app (người dùng chọn). App có sẵn trong danh sách thì không tắt được.
     pub fn set_tap(&mut self, bundle: &str, on: bool) {
+        self.tap_auto.remove(bundle);
         if on {
             self.tap.insert(bundle.to_string());
         } else {
             self.tap.remove(bundle);
+        }
+    }
+
+    /// Bộ gõ tự phát hiện app không thay chữ được.
+    pub fn set_tap_auto(&mut self, bundle: &str) {
+        if self.tap.insert(bundle.to_string()) {
+            self.tap_auto.insert(bundle.to_string());
         }
     }
 
@@ -135,5 +156,24 @@ impl Settings {
         } else {
             AppKind::Normal
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_detected_tap_survives_a_round_trip_and_a_manual_choice_clears_it() {
+        let mut s = Settings::load("tap\tcom.a\tauto\ntap\tcom.b\nmarked\tcom.c\n");
+        assert!(s.tap("com.a") && s.tap("com.b") && s.tap("com.c"));
+        assert_eq!(s.tap_auto.iter().collect::<Vec<_>>(), ["com.a"]);
+        let again = Settings::load(&s.save());
+        assert_eq!(again.tap_auto.iter().collect::<Vec<_>>(), ["com.a"]);
+        s.set_tap("com.a", true);
+        assert!(s.tap("com.a") && s.tap_auto.is_empty());
+        // đã có (người dùng chọn) thì không thành "tự ghi"
+        s.set_tap_auto("com.b");
+        assert!(s.tap_auto.is_empty());
     }
 }

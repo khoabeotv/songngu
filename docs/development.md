@@ -58,7 +58,10 @@ cargo run --release -- save-model models/model.bin \
 ## Bộ gõ macOS
 
 ```sh
-platform/macos/build.sh             # -> target/Songngu.app (arm64 + x86_64 nếu có target x86_64-apple-darwin)
+platform/macos/build.sh             # -> target/Songngu.app (arm64 + x86_64 nếu có target x86_64-apple-darwin), kèm cửa sổ cài đặt
+# chụp trang N (0-3) của cửa sổ cài đặt ra PNG, sáng hoặc tối; không cần quyền Ghi màn hình, chạy được cả khi máy khoá
+SONGNGU_PAGE=0 SONGNGU_APPEARANCE=dark SONGNGU_SCREENSHOT=/tmp/shots caffeinate -d -u \
+  target/Songngu.app/Contents/Helpers/SongnguSettings.app/Contents/MacOS/SongnguSettings
 platform/macos/build.sh --install   # chép vào ~/Library/Input Methods và đăng ký nguồn nhập
 clang -Iplatform/macos platform/macos/smoke.c target/release/libsongngu.a -o target/smoke   # chạy thử C ABI
 target/smoke target/Songngu.app/Contents/Resources "truowfng tas"
@@ -75,7 +78,7 @@ target/bench target/Songngu.app/Contents/Resources f.keys [--paced 10 10] [--idl
 | `src/` | Engine Rust (thư viện + CLI `songngu`) |
 | `tests/` | Test hành vi engine (`decide.rs`) và lớp bộ gõ (`ime.rs`) |
 | `data/` | Từ điển tần suất Việt/Anh đi kèm |
-| `platform/macos/` | Bộ gõ InputMethodKit + đường chặn phím, biểu tượng, script build |
+| `platform/macos/` | Bộ gõ InputMethodKit + đường chặn phím, biểu tượng, script build; `settings/`: cửa sổ cài đặt SwiftUI |
 | `tools/data/` | Tải, lọc corpus, sinh chat, lọc từ tiếng Anh |
 | `tools/eval/` | Bảng đo dev/test, thử nghiệm bộ xếp hạng lại |
 | `docs/` | Kiến trúc, phát triển, đo đạc, dữ liệu |

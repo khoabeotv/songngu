@@ -8,8 +8,12 @@
 static SnHandle *gEngine;
 static NSString *gApp;
 
-static NSString *supportFile(NSString *name) {
+NSString *songnguSupportFile(NSString *name) {
     return [NSHomeDirectory() stringByAppendingPathComponent:[@"Library/Application Support/Songngu" stringByAppendingPathComponent:name]];
+}
+
+static NSString *supportFile(NSString *name) {
+    return songnguSupportFile(name);
 }
 
 // Nạp mô hình (mmap, vài ms). main.m gọi ngay khi tiến trình khởi động.
@@ -107,7 +111,7 @@ static void apply(SnAction a, id sender) {
             noCursor = [bundle isEqualToString:noCursorApp] ? noCursor + 1 : 1;
             noCursorApp = bundle;
             if (noCursor >= kNoCursorLimit && bundle && !sn_tap_app(gEngine, bundle.UTF8String))
-                sn_set_tap_app(gEngine, bundle.UTF8String, true);
+                sn_set_tap_auto(gEngine, bundle.UTF8String);
             // lần này: sửa bằng phím giả nếu có quyền, không thì thử ký tự DEL (nhiều app bỏ qua)
             if (keyTapPostEdit(a.erase, commit)) return;
             commit = [[@"" stringByPaddingToLength:a.erase withString:@"\x7f" startingAtIndex:0] stringByAppendingString:commit];
@@ -179,53 +183,42 @@ static void apply(SnAction a, id sender) {
     [super deactivateServer:sender];
 }
 
-// Menu của bộ gõ trên thanh menu. Mục theo app áp cho app trước mặt.
+// Menu của bộ gõ trên thanh menu: chỉ mục theo app trước mặt; tuỳ chọn chung, danh sách app, bộ nhớ nằm trong cửa sổ
+// cài đặt (app SwiftUI riêng trong Contents/Helpers, sửa settings.tsv/memory.tsv, bộ gõ tự nạp lại).
 - (NSMenu *)menu {
+    if (gEngine) sn_reload(gEngine);
     NSMenu *m = [[NSMenu alloc] initWithTitle:@"Songngu"];
+    [m addItem:[[NSMenuItem alloc] initWithTitle:@"Cài đặt Songngu…" action:@selector(openSettings:) keyEquivalent:@""]];
+    [m addItem:[NSMenuItem separatorItem]];
     NSString *front = keyTapFrontApp();
+    NSMenuItem *exclude = [[NSMenuItem alloc] initWithTitle:@"Bỏ qua app này" action:@selector(toggleOption:) keyEquivalent:@""];
+    exclude.representedObject = @"exclude";
+    exclude.state = (gEngine && sn_option_get(gEngine, "exclude")) ? NSControlStateValueOn : NSControlStateValueOff;
+    [m addItem:exclude];
     NSMenuItem *tap = [[NSMenuItem alloc] initWithTitle:@"Chặn phím ở app này (terminal, app không nhận bộ gõ)"
                                                  action:@selector(toggleTap:)
                                           keyEquivalent:@""];
     tap.representedObject = front;
     tap.state = (gEngine && front && sn_tap_app(gEngine, front.UTF8String)) ? NSControlStateValueOn : NSControlStateValueOff;
-    NSArray *items = @[
-        @[ @"Bỏ qua app này", @"exclude" ], tap, @[ @"Đặt dấu kiểu cũ (hòa, thủy)", @"classic_tone" ], @[ @"Gõ VNI", @"vni" ],
-        @[ @"[ ] gõ ơ ư", @"brackets" ], @[ @"Lật Anh/Việt bằng Esc thay cho Backspace", @"esc_flip" ],
-        @[ @"Chỉ chặn phím ở app trong danh sách (không tự chặn ở app không nhận bộ gõ)", @"manual_tap" ],
-        @[ @"Ghi nhật ký gõ (chỉ trên máy này)", @"log" ]
-    ];
-    for (id it in items) {
-        if ([it isKindOfClass:[NSMenuItem class]]) {
-            [m addItem:it];
-            continue;
-        }
-        NSMenuItem *mi = [[NSMenuItem alloc] initWithTitle:it[0] action:@selector(toggleOption:) keyEquivalent:@""];
-        mi.representedObject = it[1];
-        mi.state = (gEngine && sn_option_get(gEngine, [it[1] UTF8String])) ? NSControlStateValueOn : NSControlStateValueOff;
-        [m addItem:mi];
-    }
+    [m addItem:tap];
     if (!keyTapRunning()) {
         [m addItem:[NSMenuItem separatorItem]];
         [m addItem:[[NSMenuItem alloc] initWithTitle:@"Cấp quyền Trợ năng (để gõ trong terminal)…"
                                               action:@selector(askPermission:)
                                        keyEquivalent:@""]];
     }
-    // Không hỏi lại (hộp thoại từ bộ gõ sẽ giành focus của app): file cũ vẫn giữ ở memory-forgotten.tsv.
-    [m addItem:[NSMenuItem separatorItem]];
-    uint32_t learned = gEngine ? sn_memory_size(gEngine) : 0;
-    NSString *title = [NSString stringWithFormat:@"Quên những gì đã học (%u từ)", learned];
-    NSMenuItem *forget = [[NSMenuItem alloc] initWithTitle:title action:@selector(forgetMemory:) keyEquivalent:@""];
-    forget.enabled = learned > 0;
-    [m addItem:forget];
     return m;
+}
+
+- (void)openSettings:(id)sender {
+    NSURL *url = [[NSBundle mainBundle].bundleURL URLByAppendingPathComponent:@"Contents/Helpers/SongnguSettings.app"];
+    NSWorkspaceOpenConfiguration *cfg = [NSWorkspaceOpenConfiguration configuration];
+    cfg.activates = YES;
+    [[NSWorkspace sharedWorkspace] openApplicationAtURL:url configuration:cfg completionHandler:nil];
 }
 
 static NSMenuItem *menuItem(id sender) {
     return [sender isKindOfClass:[NSDictionary class]] ? sender[kIMKCommandMenuItemName] : sender;
-}
-
-- (void)forgetMemory:(id)sender {
-    if (gEngine) sn_forget_memory(gEngine);
 }
 
 - (void)askPermission:(id)sender {

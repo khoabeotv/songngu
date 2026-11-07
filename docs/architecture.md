@@ -11,7 +11,7 @@ Không có chế độ Anh/Việt: mỗi phím chạy song song nhánh Telex và
 - `store.rs`: định dạng nhị phân của mô hình, mmap, kiểm biên và UTF-8 một lần lúc nạp.
 - `engine.rs`: `P(w | trước) = λ·bigram + (1-λ)·P(tiếng | lịch sử)·P(w | tiếng)`, nhân hệ số chữ hoa và kiểu nối; giữa từ dùng cùng công thức cho tiền tố. Dấu ngăn cách chờ tới phím đầu của từ sau mới áp vào ngữ cảnh: dính liền hai từ thì `.` không phải hết câu. `P(tiếng | lịch sử)` trộn xác suất học từ corpus với tỉ lệ Anh/Việt 20 từ vừa gõ.
 - `memory.rs`: mỗi lần lật cộng cặp (từ trước, từ được chọn) với trọng số 20 lần gặp, và hệ số ưu tiên theo từ.
-- `ime.rs`: logic phím độc lập hệ điều hành (nhìn từ sau, thay chữ trước con trỏ, mở lại từ, lật, phát hiện app không thay được chữ). `ffi.rs`: C ABI cho lớp OS. `settings.rs`: app bỏ qua/kiểu code/chặn phím, tuỳ chọn.
+- `ime.rs`: logic phím độc lập hệ điều hành (nhìn từ sau, thay chữ trước con trỏ, mở lại từ, lật, phát hiện app không thay được chữ). `ffi.rs`: C ABI cho lớp OS. `settings.rs`: app bỏ qua/kiểu code/chặn phím (đánh dấu app bộ gõ tự thêm), tuỳ chọn.
 - `typing.rs`: người gõ giả lập cho bộ đo (xem `evaluation.md`).
 
 "Học" là đếm (không mạng neural):
@@ -54,6 +54,7 @@ Hành vi chung:
 
 ## macOS
 
+- Cửa sổ cài đặt (SwiftUI, `platform/macos/settings/`) là app riêng ở `Contents/Helpers/SongnguSettings.app`, menu SN mở nó. Nó đọc/sửa file người dùng qua C ABI của thư viện Rust (`ffi_settings.rs`), để cách đọc file chỉ nằm một chỗ. Hai tiến trình chỉ nói chuyện qua file: cửa sổ ghi trọn `settings.tsv`/`memory.tsv` (file tạm rồi đổi tên), bộ gõ thấy thời điểm sửa file đổi thì nạp lại (khi đổi app, mở menu, trước khi tự ghi, và tối đa mỗi 500 ms khi gõ, `ffi.rs`). Bộ gõ ghi `status.tsv` (pid, quyền Trợ năng, chặn phím) khi trạng thái đổi, vì cửa sổ là tiến trình khác, không tự hỏi được quyền của bộ gõ. Cửa sổ không có ô nhập chữ nên đường chặn phím bỏ qua nó.
 - `Info.plist` khai báo nguồn nhập; biểu tượng `icon.pdf` (vẽ bằng `mkicon.m`) là ảnh template 20×16 pt, hệ thống tô theo giao diện sáng/tối.
 - `build.sh` ký bằng chứng chỉ "Songngu Dev" nếu có trong keychain: quyền Trợ năng gắn với chứng chỉ nên còn nguyên qua các lần build. Không có thì ký ad-hoc, mỗi lần build phải cấp lại quyền.
 - Phát hành cho người khác: cần ký Developer ID (`codesign --options runtime --sign "Developer ID Application: …"`), notarize (`xcrun notarytool submit … --wait`) và `xcrun stapler staple`; xem lại điều kiện phân phối mô hình trong `NOTICE`.

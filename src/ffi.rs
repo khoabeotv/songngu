@@ -1,20 +1,31 @@
 //! C ABI cho lớp bộ gõ của từng OS. Một handle cho cả tiến trình; chuỗi trả về thuộc handle, hợp lệ tới lần gọi sau.
 //! Engine lỗi (panic) thì handle tự tắt: mọi phím sau đó đi thẳng vào app, bộ gõ không chết theo.
+//! File cài đặt và bộ nhớ có thể bị cửa sổ cài đặt (tiến trình khác) sửa: handle kiểm thời điểm sửa file khi đổi app,
+//! trước khi tự ghi, và tối đa mỗi `RECHECK` khi gõ, đổi thì nạp lại.
 
 use std::ffi::{c_char, CStr, CString};
 use std::io::Write;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::engine::{Config, Engine};
+use crate::lexicon::VnLex;
 use crate::ime::{AppKind, Event, Session};
 use crate::memory::Memory;
 use crate::settings::Settings;
 use crate::telex::TelexOpts;
 
+const RECHECK: Duration = Duration::from_millis(500);
+
 pub struct Handle {
     session: Session<'static>,
+    vn: &'static VnLex,
     settings: Settings,
+    /// Thời điểm sửa file lúc nạp/ghi gần nhất (None: chưa có file).
+    settings_stamp: Option<SystemTime>,
+    memory_stamp: Option<SystemTime>,
+    checked: Option<Instant>,
     app: String,
     commit: CString,
     memory_path: Option<PathBuf>,
@@ -41,13 +52,21 @@ fn cstring(s: String) -> CString {
     CString::new(s.replace('\0', "")).unwrap_or_default()
 }
 
-fn write_file(path: &Option<PathBuf>, text: &str) {
-    if let Some(p) = path {
-        if let Some(dir) = p.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(p, text);
+fn write_file(path: &Option<PathBuf>, text: &str) -> Option<SystemTime> {
+    let p = path.as_ref()?;
+    if let Some(dir) = p.parent() {
+        let _ = std::fs::create_dir_all(dir);
     }
+    let _ = std::fs::write(p, text);
+    stamp(Some(p))
+}
+
+fn stamp(path: Option<&Path>) -> Option<SystemTime> {
+    std::fs::metadata(path?).and_then(|m| m.modified()).ok()
+}
+
+fn read_settings(path: Option<&Path>) -> Settings {
+    path.and_then(|p| std::fs::read_to_string(p).ok()).map_or_else(Settings::default, |t| Settings::load(&t))
 }
 
 impl Handle {
@@ -65,15 +84,47 @@ impl Handle {
         cfg.en_bias = if self.session.app == AppKind::Code { 5.0 } else { 1.0 };
     }
 
+    /// Nạp lại file bị tiến trình khác sửa. `force`: bỏ qua giới hạn mỗi `RECHECK`.
+    fn refresh(&mut self, force: bool) {
+        if !force && self.checked.is_some_and(|t| t.elapsed() < RECHECK) {
+            return;
+        }
+        self.checked = Some(Instant::now());
+        let s = stamp(self.settings_path.as_deref());
+        if s != self.settings_stamp {
+            self.settings_stamp = s;
+            self.settings = read_settings(self.settings_path.as_deref());
+            if !self.broken {
+                self.apply_settings();
+            }
+        }
+        let m = stamp(self.memory_path.as_deref());
+        if m != self.memory_stamp {
+            self.memory_stamp = m;
+            let text = self.memory_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+            self.session.eng.set_memory(Memory::load(&text, self.vn));
+            self.session.memory_dirty = false;
+        }
+    }
+
+    fn save_settings(&mut self) {
+        self.settings_stamp = write_file(&self.settings_path, &self.settings.save());
+    }
+
+    fn save_memory(&mut self) {
+        self.memory_stamp = write_file(&self.memory_path, &self.session.eng.memory().save());
+    }
+
     fn after_event(&mut self) {
         if self.session.take_direct_broke() && !self.app.is_empty() {
             // app không thay chữ được: từ nay chặn phím và xoá bằng Backspace ở app này
-            self.settings.set_tap(&self.app.clone(), true);
-            write_file(&self.settings_path, &self.settings.save());
+            self.refresh(true);
+            self.settings.set_tap_auto(&self.app.clone());
+            self.save_settings();
         }
         if self.session.memory_dirty {
             self.session.memory_dirty = false;
-            write_file(&self.memory_path, &self.session.eng.memory().save());
+            self.save_memory();
         }
         if !self.session.log.is_empty() {
             let lines = std::mem::take(&mut self.session.log);
@@ -119,14 +170,20 @@ pub unsafe extern "C" fn sn_create(
             eng = eng.with_context(Box::leak(Box::new(ctx)));
         }
         let memory_path = memory.map(PathBuf::from);
+        let memory_stamp = stamp(memory_path.as_deref());
         if let Some(text) = memory_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
             eng.set_memory(Memory::load(&text, vn));
         }
         let settings_path = settings.map(PathBuf::from);
-        let s = settings_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).map_or_else(Settings::default, |t| Settings::load(&t));
+        let settings_stamp = stamp(settings_path.as_deref());
+        let s = read_settings(settings_path.as_deref());
         let mut h = Handle {
             session: Session::new(eng),
+            vn,
             settings: s,
+            settings_stamp,
+            memory_stamp,
+            checked: None,
             app: String::new(),
             commit: CString::default(),
             memory_path,
@@ -148,9 +205,19 @@ pub unsafe extern "C" fn sn_create(
 pub unsafe extern "C" fn sn_set_app(h: *mut Handle, bundle: *const c_char) {
     let h = &mut *h;
     h.app = string(bundle).unwrap_or_default();
+    h.refresh(true);
     if !h.broken {
         h.apply_settings();
     }
+}
+
+/// Nạp lại cài đặt và bộ nhớ nếu file đã bị sửa (cửa sổ cài đặt). Gọi khi mở menu.
+///
+/// # Safety
+/// `h` từ `sn_create`.
+#[no_mangle]
+pub unsafe extern "C" fn sn_reload(h: *mut Handle) {
+    (*h).refresh(true);
 }
 
 /// `kind`: 0 ký tự (`ch` là mã Unicode), 1 Backspace, 2 Esc, 3 phím khác (Enter, Tab, mũi tên, phím tắt), 4 Shift+Esc.
@@ -169,6 +236,9 @@ pub unsafe extern "C" fn sn_event(h: *mut Handle, kind: u32, ch: u32, before: *c
         _ => Event::Other,
     };
     let before = string(before);
+    if !h.broken {
+        h.refresh(false);
+    }
     let a = if h.broken {
         None
     } else {
@@ -226,8 +296,25 @@ pub unsafe extern "C" fn sn_tap_app(h: *mut Handle, bundle: *const c_char) -> bo
 pub unsafe extern "C" fn sn_set_tap_app(h: *mut Handle, bundle: *const c_char, on: bool) {
     let h = &mut *h;
     let Some(b) = string(bundle).filter(|b| !b.is_empty()) else { return };
+    h.refresh(true);
     h.settings.set_tap(&b, on);
-    write_file(&h.settings_path, &h.settings.save());
+    h.save_settings();
+    if !h.broken {
+        h.apply_settings();
+    }
+}
+
+/// Bộ gõ tự phát hiện app không đưa phím qua bộ gõ / không thay chữ được: ghi `tap` kèm dấu tự ghi.
+///
+/// # Safety
+/// `h` từ `sn_create`, `bundle` là chuỗi C hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn sn_set_tap_auto(h: *mut Handle, bundle: *const c_char) {
+    let h = &mut *h;
+    let Some(b) = string(bundle).filter(|b| !b.is_empty()) else { return };
+    h.refresh(true);
+    h.settings.set_tap_auto(&b);
+    h.save_settings();
     if !h.broken {
         h.apply_settings();
     }
@@ -262,11 +349,11 @@ pub unsafe extern "C" fn sn_commit_all(h: *mut Handle) {
 /// `h` từ `sn_create`.
 #[no_mangle]
 pub unsafe extern "C" fn sn_save_memory(h: *mut Handle) -> bool {
-    let h = &*h;
+    let h = &mut *h;
     if h.broken || h.session.eng.memory().is_empty() {
         return false;
     }
-    write_file(&h.memory_path, &h.session.eng.memory().save());
+    h.save_memory();
     true
 }
 
@@ -297,6 +384,7 @@ pub unsafe extern "C" fn sn_forget_memory(h: *mut Handle) {
             let _ = std::fs::rename(p, p.with_file_name("memory-forgotten.tsv"));
         }
     }
+    h.memory_stamp = None;
     if !h.broken {
         h.session.forget();
         h.session.memory_dirty = false;
@@ -325,6 +413,7 @@ pub unsafe extern "C" fn sn_option_get(h: *mut Handle, name: *const c_char) -> b
 #[no_mangle]
 pub unsafe extern "C" fn sn_option_toggle(h: *mut Handle, name: *const c_char) {
     let h = &mut *h;
+    h.refresh(true);
     match string(name).as_deref() {
         Some("exclude") => {
             let app = h.app.clone();
@@ -333,7 +422,7 @@ pub unsafe extern "C" fn sn_option_toggle(h: *mut Handle, name: *const c_char) {
         Some(n) => h.settings.toggle_option(n),
         None => return,
     }
-    write_file(&h.settings_path, &h.settings.save());
+    h.save_settings();
     if !h.broken {
         h.apply_settings();
     }

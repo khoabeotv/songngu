@@ -7,6 +7,8 @@
 #define SN_SYNTHETIC 0x534E4755
 
 void songnguLoad(void);
+// File trong ~/Library/Application Support/Songngu.
+NSString *songnguSupportFile(NSString *name);
 SnHandle *songnguEngine(void);
 // Đổi app đang gõ: kết thúc từ dở ở app cũ rồi áp cài đặt của app mới.
 void songnguSetApp(NSString *bundle);

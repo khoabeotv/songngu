@@ -1,6 +1,7 @@
 pub mod context;
 pub mod engine;
 pub mod ffi;
+pub mod ffi_settings;
 pub mod ime;
 pub mod lexicon;
 pub mod memory;

@@ -1,0 +1,246 @@
+// Dữ liệu của cửa sổ cài đặt: đọc/sửa file người dùng qua C ABI của thư viện Rust (src/ffi_settings.rs), để cách đọc
+// settings.tsv/memory.tsv chỉ nằm một chỗ. Bộ gõ là tiến trình khác, tự nạp lại khi file đổi; status.tsv do bộ gõ ghi.
+import AppKit
+import SwiftUI
+import UniformTypeIdentifiers
+
+enum Page: String, CaseIterable, Identifiable {
+    case typing, apps, learned, status
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .typing: return "Gõ"
+        case .apps: return "Ứng dụng"
+        case .learned: return "Đã học"
+        case .status: return "Trạng thái"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .typing: return "keyboard"
+        case .apps: return "square.grid.2x2.fill"
+        case .learned: return "brain.head.profile"
+        case .status: return "checkmark.shield.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .typing: return .gray
+        case .apps: return .blue
+        case .learned: return .pink
+        case .status: return .green
+        }
+    }
+}
+
+struct AppEntry: Identifiable {
+    let bundle: String
+    let name: String
+    let icon: NSImage
+    var id: String { bundle }
+
+    static func of(_ bundle: String) -> AppEntry {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) {
+            let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+            return AppEntry(bundle: bundle, name: name, icon: NSWorkspace.shared.icon(forFile: url.path))
+        }
+        return AppEntry(bundle: bundle, name: bundle, icon: NSWorkspace.shared.icon(for: .application))
+    }
+}
+
+struct LearnedWord: Identifiable {
+    let key: String
+    let word: String
+    let detail: String
+    var id: String { key }
+}
+
+struct Status {
+    var running = false
+    var accessibility = false
+    var keytap = false
+}
+
+@MainActor
+final class Store: ObservableObject {
+    let dir: URL
+    private let settingsPath: String
+    private let memoryPath: String
+    private let statusURL: URL
+    /// Contents/Resources của Songngu.app chứa app này (nil khi chạy ngoài bundle).
+    let resources: URL?
+
+    @Published var options: [String: Bool] = [:]
+    @Published var exclude: [AppEntry] = []
+    @Published var tap: [AppEntry] = []
+    @Published var tapAuto: Set<String> = []
+    @Published var builtinTap: [AppEntry] = []
+    @Published var learned: [LearnedWord] = []
+    @Published var status = Status()
+    @Published var error: String?
+
+    private var stamps: [Date?] = [nil, nil, nil]
+    private var timer: Timer?
+    private var names: [String: AppEntry] = [:]
+
+    init() {
+        dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Songngu")
+        settingsPath = dir.appendingPathComponent("settings.tsv").path
+        memoryPath = dir.appendingPathComponent("memory.tsv").path
+        statusURL = dir.appendingPathComponent("status.tsv")
+        var url = Bundle.main.bundleURL
+        while url.path != "/" && url.lastPathComponent != "Songngu.app" { url.deleteLastPathComponent() }
+        resources = url.lastPathComponent == "Songngu.app" ? url.appendingPathComponent("Contents/Resources") : nil
+        reload(force: true)
+        // bộ gõ hoặc menu SN có thể sửa file trong lúc cửa sổ đang mở
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.reload(force: false) }
+        }
+    }
+
+    private static func mtime(_ path: String) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+    }
+
+    private static func take(_ p: UnsafeMutablePointer<CChar>?) -> String {
+        guard let p else { return "" }
+        defer { sn_str_free(p) }
+        return String(cString: p)
+    }
+
+    private func list(_ name: String) -> [String] {
+        Store.take(sn_cfg_list(settingsPath, name)).split(separator: "\n").map(String.init)
+    }
+
+    private func entry(_ bundle: String) -> AppEntry {
+        if let e = names[bundle] { return e }
+        let e = AppEntry.of(bundle)
+        names[bundle] = e
+        return e
+    }
+
+    func reload(force: Bool) {
+        let now = [Store.mtime(settingsPath), Store.mtime(memoryPath), Store.mtime(statusURL.path)]
+        let status = readStatus()
+        if !force && now == stamps {
+            // pid trong status.tsv có thể vừa tắt mà file không đổi
+            if status.running != self.status.running { self.status = status }
+            return
+        }
+        if force || now[0] != stamps[0] {
+            options = Dictionary(uniqueKeysWithValues: Options.all.map { ($0.key, sn_cfg_option(settingsPath, $0.key)) })
+            exclude = list("exclude").map(entry)
+            tap = list("tap").map(entry)
+            tapAuto = Set(list("tap_auto"))
+            builtinTap = list("builtin_tap").map(entry)
+        }
+        if force || now[1] != stamps[1] {
+            learned = Store.take(sn_mem_learned(memoryPath)).split(separator: "\n").compactMap { line in
+                let f = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+                guard f.count == 5 else { return nil }
+                var detail = "chọn \(f[2]) · bỏ \(f[3])"
+                if !f[4].isEmpty { detail += " · sau: \(f[4])" }
+                return LearnedWord(key: f[0], word: f[1], detail: detail)
+            }
+        }
+        self.status = status
+        stamps = now
+    }
+
+    private func readStatus() -> Status {
+        let text = (try? String(contentsOf: statusURL, encoding: .utf8)) ?? ""
+        var fields: [String: String] = [:]
+        for line in text.split(separator: "\n") {
+            let kv = line.split(separator: "\t", maxSplits: 1).map(String.init)
+            if kv.count == 2 { fields[kv[0]] = kv[1] }
+        }
+        guard let pid = fields["pid"].flatMap({ pid_t($0) }), kill(pid, 0) == 0 || errno == EPERM else { return Status() }
+        return Status(running: true, accessibility: fields["accessibility"] == "1", keytap: fields["keytap"] == "1")
+    }
+
+    // ---- sửa ----
+
+    private func done(_ ok: Bool, _ what: String) {
+        error = ok ? nil : "Không ghi được \(what)."
+        reload(force: true)
+    }
+
+    func toggle(_ key: String) {
+        done(sn_cfg_toggle_option(settingsPath, key), "settings.tsv")
+    }
+
+    func remove(_ list: String, _ bundle: String) {
+        done(sn_cfg_set(settingsPath, list, bundle, false), "settings.tsv")
+    }
+
+    /// Chọn một app trong /Applications rồi thêm vào `list` ("exclude" hoặc "tap").
+    func pickApp(into list: String) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Thêm"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let id = Bundle(url: url)?.bundleIdentifier else {
+            error = "Không đọc được bundle id của \(url.lastPathComponent)."
+            return
+        }
+        done(sn_cfg_set(settingsPath, list, id, true), "settings.tsv")
+    }
+
+    func forget(_ key: String) {
+        done(sn_mem_forget(memoryPath, key), "memory.tsv")
+    }
+
+    func forgetAll() {
+        done(sn_mem_forget_all(memoryPath), "memory.tsv")
+    }
+
+    // ---- thông tin ----
+
+    var version: String {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        guard let c = Bundle.main.object(forInfoDictionaryKey: "SongnguCommit") as? String, !c.isEmpty else { return v }
+        return "\(v) (\(c))"
+    }
+
+    var model: String {
+        guard let r = resources,
+              let size = (try? FileManager.default.attributesOfItem(atPath: r.appendingPathComponent("model.bin").path))?[.size] as? Int64
+        else { return "Không có: bộ gõ chạy không ngữ cảnh" }
+        let tag = (try? String(contentsOf: r.appendingPathComponent("model-version.txt"), encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "?"
+        return "\(tag) · \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))"
+    }
+
+    var notice: URL? {
+        resources.map { $0.appendingPathComponent("NOTICE") }.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+    }
+
+    func openAccessibility() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+}
+
+/// Tuỳ chọn gõ: tên trong settings.tsv, tiêu đề, giải thích.
+struct Options: Identifiable {
+    let key: String
+    let title: String
+    let desc: String
+    var id: String { key }
+
+    static let style = [
+        Options(key: "classic_tone", title: "Đặt dấu kiểu cũ", desc: "hòa, thủy thay vì hoà, thuỷ"),
+        Options(key: "vni", title: "Gõ VNI", desc: "Phím số làm dấu: a1 = á, o7 = ơ, d9 = đ"),
+        Options(key: "brackets", title: "[ ] gõ ơ ư", desc: "[ = ơ, ] = ư"),
+    ]
+    static let flip = Options(key: "esc_flip", title: "Lật bằng Esc thay cho Backspace",
+                              desc: "Backspace chỉ còn là xoá; Esc lật từ đang gõ và từ vừa gõ ở app thường")
+    static let manualTap = Options(key: "manual_tap", title: "Chỉ chặn phím ở app trong danh sách",
+                                   desc: "Không tự chặn phím ở app không đưa phím qua bộ gõ (terminal kiểu gpui, vài app Flutter)")
+    static let log = Options(key: "log", title: "Ghi nhật ký gõ",
+                             desc: "Ghi phím và chữ ra typing-log.tsv trên máy này để báo lỗi; không ghi trong ô mật khẩu")
+    static let all = style + [flip, manualTap, log]
+}

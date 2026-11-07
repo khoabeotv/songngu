@@ -129,7 +129,9 @@ static CGEventRef onEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef ev
     BOOL listed = sn_tap_app(h, bundle.UTF8String);
     // App không mở phiên nhập liệu (terminal kiểu gpui, Flutter ở vài máy): phím không bao giờ tới bộ gõ, đường này lo.
     // Bỏ qua phím giữ lặp (game, phím di chuyển). Phím cho đi qua thì đánh dấu, phòng phiên mở muộn hơn phím.
-    BOOL orphan = !listed && ![bundle isEqualToString:gSession] && !sn_option_get(h, "manual_tap") &&
+    // Cửa sổ cài đặt (không có ô nhập chữ) cũng không mở phiên: bỏ qua, phím của nó là phím tắt.
+    BOOL orphan = !listed && ![bundle isEqualToString:gSession] && ![bundle hasPrefix:@"com.songngu."] &&
+                  !sn_option_get(h, "manual_tap") &&
                   !CGEventGetIntegerValueField(ev, kCGKeyboardEventAutorepeat);
     if (!listed && !orphan) {
         gTyping = NO;
@@ -173,6 +175,20 @@ static BOOL createTap(void) {
     return YES;
 }
 
+// status.tsv cho cửa sổ cài đặt (tiến trình khác, không tự hỏi được quyền của bộ gõ): ghi lại khi trạng thái đổi.
+static void writeStatus(void) {
+    static NSString *last;
+    NSString *s = [NSString stringWithFormat:@"pid\t%d\naccessibility\t%d\nkeytap\t%d\n", getpid(), AXIsProcessTrusted(),
+                                             keyTapRunning()];
+    if ([s isEqualToString:last]) return;
+    NSString *path = songnguSupportFile(@"status.tsv");
+    [[NSFileManager defaultManager] createDirectoryAtPath:path.stringByDeletingLastPathComponent
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    if ([s writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]) last = s;
+}
+
 void keyTapAskPermission(void) {
     NSDictionary *opts = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt : @YES};
     AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts);
@@ -200,11 +216,14 @@ void keyTapStart(void) {
                                                                 gFront = app.bundleIdentifier;
                                                                 gTyping = NO;
                                                             }];
-    if (createTap()) return;
-    // chưa có quyền Trợ năng: thử lại tới khi người dùng cấp (không cần khởi động lại bộ gõ)
+    createTap();
+    writeStatus();
+    // chưa có quyền Trợ năng: thử lại tới khi người dùng cấp (không cần khởi động lại bộ gõ); quyền có thể bị gỡ bất cứ lúc
+    // nào nên trạng thái cho cửa sổ cài đặt luôn được cập nhật
     [NSTimer scheduledTimerWithTimeInterval:3
                                     repeats:YES
                                       block:^(NSTimer *t) {
-                                          if (AXIsProcessTrusted() && createTap()) [t invalidate];
+                                          if (!gTap && AXIsProcessTrusted()) createTap();
+                                          writeStatus();
                                       }];
 }
