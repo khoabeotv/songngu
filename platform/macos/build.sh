@@ -45,7 +45,7 @@ echo "cửa sổ cài đặt: SDK macOS $(DEVELOPER_DIR=$SWIFT_DEV xcrun --sdk m
 SWIFT_OUT=()
 for a in $SWIFT_ARCHS; do
   DEVELOPER_DIR=$SWIFT_DEV xcrun swiftc -O -swift-version 5 -target $a-apple-macos13.0 -import-objc-header platform/macos/songngu.h \
-    platform/macos/settings/*.swift $LIB -o target/SongnguSettings-$a
+    -Xlinker -S platform/macos/settings/*.swift $LIB -o target/SongnguSettings-$a
   SWIFT_OUT+=(target/SongnguSettings-$a)
 done
 lipo -create $SWIFT_OUT -output $SETTINGS_APP/Contents/MacOS/SongnguSettings
@@ -96,7 +96,8 @@ fi
 
 clang -fobjc-arc -O2 -mmacosx-version-min=13.0 -framework Cocoa -framework CoreText -o target/mkicon platform/macos/mkicon.m
 target/mkicon $APP/Contents/Resources/icon.pdf
-clang -fobjc-arc -O2 -Wall $ARCHS -mmacosx-version-min=12.0 -Iplatform/macos -framework Cocoa -framework InputMethodKit -framework Carbon \
+# -Wl,-S: không ghi bảng gỡ lỗi (đường dẫn file .o/.a trên máy build) vào binary
+clang -fobjc-arc -O2 -Wall -Wl,-S $ARCHS -mmacosx-version-min=12.0 -Iplatform/macos -framework Cocoa -framework InputMethodKit -framework Carbon \
   -framework ApplicationServices platform/macos/main.m platform/macos/SongnguController.m platform/macos/KeyTap.m $LIB -o $APP/Contents/MacOS/Songngu
 # Ký bằng chứng chỉ "Songngu Dev" nếu có trong keychain: quyền Trợ năng gắn với chứng chỉ nên còn nguyên qua các lần
 # build. Không có thì ký ad-hoc: mỗi lần build phải xoá Songngu khỏi danh sách Trợ năng rồi cấp lại.
