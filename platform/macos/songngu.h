@@ -40,3 +40,4 @@ bool sn_cfg_set(const char *path, const char *list, const char *bundle, bool on)
 char *sn_mem_learned(const char *path);  // mỗi dòng: khoá \t chữ \t chọn \t bỏ \t ngữ cảnh
 bool sn_mem_forget(const char *path, const char *key);
 bool sn_mem_forget_all(const char *path);
+char *sn_mem_habits(const char *path);  // mỗi dòng: late|late_d \t số từ có thể gõ muộn \t số từ gõ muộn

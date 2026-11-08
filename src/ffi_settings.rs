@@ -130,6 +130,17 @@ pub unsafe extern "C" fn sn_mem_learned(path: *const c_char) -> *mut c_char {
     give(lines.join("\n"))
 }
 
+/// Thói quen gõ trong memory.tsv, mỗi dòng: tên ("late" mũ, "late_d" đ), số từ có thể gõ muộn, số từ gõ muộn.
+///
+/// # Safety
+/// `path` là chuỗi C hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn sn_mem_habits(path: *const c_char) -> *mut c_char {
+    let text = arg(path).and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    let lines: Vec<String> = memory::habits(&text).into_iter().map(|(n, o, u)| format!("{n}\t{o}\t{u}")).collect();
+    give(lines.join("\n"))
+}
+
 /// Quên một từ (khoá `canon`). False nếu không ghi được file.
 ///
 /// # Safety

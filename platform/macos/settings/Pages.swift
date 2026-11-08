@@ -150,10 +150,27 @@ struct LearnedPage: View {
                     Spacer()
                     Button("Quên tất cả…", role: .destructive) { confirm = true }
                         .controlSize(.small)
-                        .disabled(store.learned.isEmpty)
+                        .disabled(store.learned.isEmpty && store.habits.isEmpty)
                 }
             } footer: {
                 Text("Mỗi lần lật, Songngu nhớ từ được chọn và từ đứng trước nó. Quên một từ nếu bộ gõ học nhầm.")
+            }
+            Section {
+                if store.habits.isEmpty {
+                    Text("Chưa gõ đủ để biết.").foregroundStyle(.secondary)
+                }
+                ForEach(store.habits) { h in
+                    LabeledContent {
+                        Text(h.total < 20 ? "Chưa đủ dữ liệu" : "\(Int((100 * h.late / h.total).rounded()))%")
+                            .foregroundStyle(.secondary)
+                    } label: {
+                        Titled(title: h.title, desc: "\(Int(h.late)) trong \(Int(h.total)) từ \(h.name == "late" ? "có â, ê, ô" : "có đ")")
+                    }
+                }
+            } header: {
+                Text("Thói quen gõ")
+            } footer: {
+                Text("Songngu đếm bạn hay gõ dấu muộn đến đâu để bớt đoán nhầm: quen gõ \"cana\" cho \"cân\" thì bộ gõ dễ ra chữ Việt hơn. Chỉ lưu các con số này, không lưu chữ.")
             }
         }
         .formStyle(.grouped)

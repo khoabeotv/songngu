@@ -357,7 +357,7 @@ pub unsafe extern "C" fn sn_commit_all(h: *mut Handle) {
 #[no_mangle]
 pub unsafe extern "C" fn sn_save_memory(h: *mut Handle) -> bool {
     let h = &mut *h;
-    if h.broken || h.session.eng.memory().is_empty() {
+    if h.broken || h.session.eng.memory().is_blank() {
         return false;
     }
     h.save_memory();

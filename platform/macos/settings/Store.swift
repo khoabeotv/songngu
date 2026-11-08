@@ -66,6 +66,16 @@ struct AppEntry: Identifiable {
     }
 }
 
+/// Thói quen gõ dấu muộn bộ gõ đã học (memory.tsv): số từ có thể gõ muộn, số từ gõ muộn.
+struct Habit: Identifiable {
+    let name: String
+    let total: Double
+    let late: Double
+    var id: String { name }
+
+    var title: String { name == "late" ? "Gõ mũ muộn (cana → cân, nene → nên)" : "Gõ đ muộn (did → đi, duod → đươ)" }
+}
+
 struct LearnedWord: Identifiable {
     let key: String
     let word: String
@@ -120,6 +130,7 @@ final class Store: ObservableObject {
     @Published var tapAuto: Set<String> = []
     @Published var builtinTap: [AppEntry] = []
     @Published var learned: [LearnedWord] = []
+    @Published var habits: [Habit] = []
     @Published var status = Status()
     @Published var error: String?
     /// Bộ gõ chạy nền khác đang chạy (chỉ cảnh báo, không tự tắt).
@@ -209,6 +220,11 @@ final class Store: ObservableObject {
                 var detail = "chọn \(f[2]) · bỏ \(f[3])"
                 if !f[4].isEmpty { detail += " · sau: \(f[4])" }
                 return LearnedWord(key: f[0], word: f[1], detail: detail)
+            }
+            habits = Store.take(sn_mem_habits(memoryPath)).split(separator: "\n").compactMap { line in
+                let f = line.split(separator: "\t").map(String.init)
+                guard f.count == 3, let t = Double(f[1]), let l = Double(f[2]) else { return nil }
+                return Habit(name: f[0], total: t, late: l)
             }
         }
         self.status = status

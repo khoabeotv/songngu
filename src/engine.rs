@@ -64,6 +64,8 @@ pub struct Config {
     pub late_d_penalty: f64,
     /// Từ được tính là "nói rõ thứ tiếng" khi hai phương án chênh nhau hơn nghần này lần.
     pub informative_ratio: f64,
+    /// Học thói quen gõ mũ/đ muộn của từng người (`Memory::late_rate`) thay vì chỉ dùng mức phạt chung.
+    pub adapt: bool,
 }
 
 impl Default for Config {
@@ -86,6 +88,7 @@ impl Default for Config {
             late_penalty: 0.01,
             late_d_penalty: 0.3,
             informative_ratio: 10.0,
+            adapt: true,
         }
     }
 }
@@ -151,6 +154,8 @@ struct Last {
     learned: bool,
     /// Cả hai phương án đều là từ có trong từ điển (không phải âm tiết/từ chưa gặp).
     both_real: bool,
+    /// Cách gõ phương án Việt: (có â/ê/ô, mũ gõ muộn, có đ, đ gõ muộn). Tính vào thói quen khi từ đã thôi lật được.
+    habit: (bool, bool, bool, bool),
 }
 
 /// Mỗi lần người dùng lật từ bằng ngang ngần này lần gặp cặp từ đó trong corpus: một lần sửa đã đủ để lần sau
@@ -292,8 +297,23 @@ impl<'a> Engine<'a> {
     /// P(phím | từ Việt) thô: người gõ Telex hiếm khi đổi dấu thanh giữa chừng hay thêm mũ/móc sau dấu thanh
     /// ("these" -> thế, "CORS" -> CÓ), nên chuỗi phím kiểu đó nghiêng về tiếng Anh.
     fn order_penalty(&self) -> f64 {
-        let d = if self.comp.late_d { self.cfg.late_d_penalty } else { 1.0 };
-        self.cfg.odd_penalty.powi(self.comp.odd as i32) * self.cfg.late_penalty.powi(self.comp.late as i32) * d
+        let (late, late_d) = if self.cfg.adapt {
+            (self.memory.late_rate(self.cfg.late_penalty), self.memory.late_d_rate(self.cfg.late_d_penalty))
+        } else {
+            (self.cfg.late_penalty, self.cfg.late_d_penalty)
+        };
+        let d = if self.comp.late_d { late_d } else { 1.0 };
+        self.cfg.odd_penalty.powi(self.comp.odd as i32) * late.powi(self.comp.late as i32) * d
+    }
+
+    /// Từ vừa chốt thôi lật được: nếu cuối cùng là từ Việt thì tính cách gõ của nó vào thói quen.
+    fn settle_last(&mut self) {
+        if let Some(l) = self.last.take() {
+            if l.lang == Lang::Vn && self.cfg.learn && self.cfg.adapt {
+                let (hat, late, d, late_d) = l.habit;
+                self.memory.observe(hat, late, d, late_d);
+            }
+        }
     }
 
     // ---- ngữ cảnh ----
@@ -369,7 +389,7 @@ impl<'a> Engine<'a> {
 
     pub fn key(&mut self, k: char) -> View {
         if self.keys.is_empty() {
-            self.last = None;
+            self.settle_last();
             self.join = if self.cfg.join { join_class(&self.run, self.after_word) } else { 0 };
             if self.join == 0 {
                 self.flush_run();
@@ -603,6 +623,7 @@ impl<'a> Engine<'a> {
             }
         }
         let last: String = chars[ls..le].iter().collect();
+        self.settle_last();
         self.run.clear();
         self.after_word = false;
         self.set_prev(canon(&last));
@@ -614,7 +635,6 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        self.last = None;
     }
 
     /// Tiếng của một từ đã nằm trong app: so xác suất chữ đó là từ Việt và từ Anh, chênh dưới `informative_ratio`
@@ -684,8 +704,21 @@ impl<'a> Engine<'a> {
         self.run.clear();
         self.after_word = true;
         let learned = lang != natural && self.cfg.learn;
-        self.last =
-            Some(Last { vn_text: vn_text.clone(), en_text: en_text.clone(), lang, prev: before, counted: informative, natural, learned, both_real });
+        let low = vn_text.to_lowercase();
+        let hat = low.chars().any(|c| matches!(crate::syllable::split_tone(c).0, 'â' | 'ê' | 'ô'));
+        let habit = (hat, self.comp.late > 0, low.contains('đ'), self.comp.late_d);
+        self.settle_last();
+        self.last = Some(Last {
+            vn_text: vn_text.clone(),
+            en_text: en_text.clone(),
+            lang,
+            prev: before,
+            counted: informative,
+            natural,
+            learned,
+            both_real,
+            habit,
+        });
         self.keys.clear();
         self.comp = Composer::new(self.cfg.telex);
         self.shown = None;

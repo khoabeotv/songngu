@@ -559,3 +559,25 @@ fn context_lost_by_a_click_comes_back_from_the_text_before_the_cursor() {
     assert_eq!(run(true, "please check the log. "), "please check the log. visa ");
 }
 
+#[test]
+fn a_late_hat_habit_is_learned_and_changes_the_close_calls() {
+    // "theme" thường là từ Anh. Người quen gõ mũ muộn (thêm = t-h-e-m-e) thì sau một thời gian ra "thêm".
+    let mut s = session();
+    let mut app = App::default();
+    app.run(&mut s, "theme ");
+    assert_eq!(app.doc, "theme ");
+    for _ in 0..150 {
+        app.run(&mut s, "cana tieen ");
+    }
+    // từ cuối còn lật được nên chưa tính
+    let saved = s.eng.memory().save();
+    assert!(saved.contains("habit\tlate\t299\t150\n"), "{saved}");
+    let mut app = App::default();
+    app.run(&mut s, "theme ");
+    assert_eq!(app.doc, "thêm ");
+    // tắt học thói quen: về mức phạt chung
+    s.eng.cfg.adapt = false;
+    let mut app = App::default();
+    app.run(&mut s, "theme ");
+    assert_eq!(app.doc, "theme ");
+}

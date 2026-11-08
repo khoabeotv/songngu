@@ -69,7 +69,7 @@ platform/macos/build.sh --install
 | Bắt đầu | Các bước macOS bắt người dùng tự làm (thêm nguồn nhập, chọn SN, quyền Trợ năng, tắt bộ gõ chạy nền khác), mỗi bước có nút mở đúng chỗ và tự đánh dấu khi xong. Cửa sổ mở trang này khi còn bước chưa xong |
 | Gõ | Đặt dấu kiểu cũ (hòa, thủy); gõ VNI; `[ ]` gõ ơ ư; lật bằng Esc thay cho Backspace; chỉ chặn phím ở app trong danh sách (mặc định Songngu tự lo app không nhận bộ gõ, như XKey, đổi lại gõ chữ ở chỗ không có ô nhập như danh sách thư, Finder có thể sinh Backspace giả); ghi nhật ký gõ ra `typing-log.tsv` (để báo lỗi, không ghi trong ô mật khẩu) |
 | Ứng dụng | App bỏ qua và app chặn phím: thêm, gỡ. App "tự phát hiện" là bộ gõ tự thêm, gỡ nếu app vẫn gõ đúng |
-| Đã học | Các từ học được từ những lần lật và ngữ cảnh của chúng; quên từng từ hoặc tất cả (file cũ giữ ở `memory-forgotten.tsv`) |
+| Đã học | Các từ học được từ những lần lật và ngữ cảnh của chúng; thói quen gõ mũ/đ muộn (quen gõ "cana" cho "cân" thì bộ gõ dễ ra chữ Việt hơn); quên từng từ hoặc tất cả (file cũ giữ ở `memory-forgotten.tsv`) |
 | Trạng thái | Bộ gõ có đang chạy, quyền Trợ năng, bộ gõ chạy nền khác đang xung đột; tự động cập nhật và kiểm tra cập nhật; phiên bản, mô hình, giấy phép |
 | Báo lỗi | Mô tả lỗi, app đang gõ, vài chục dòng nhật ký gõ cuối (sửa được, xoá dòng riêng tư) và thông tin máy, rồi mở sẵn một issue trên GitHub. Chỉ mở trình duyệt khi bấm; issue là công khai |
 

@@ -1,6 +1,8 @@
 //! Bộ nhớ riêng của người gõ: học từ mỗi lần người dùng lật từ engine vừa chọn ("visa" -> "vía").
 //! - Theo ngữ cảnh: cặp (từ trước, từ được chọn) cộng vào bigram với trọng số lớn, nên cùng ngữ cảnh lần sau tự đúng.
 //! - Theo từ: tỉ lệ số lần được chọn / bị bỏ, đẩy nhẹ ở mọi ngữ cảnh khác.
+//! - Thói quen gõ: tỉ lệ từ Việt người này gõ mũ hoặc đ muộn ("nene" cho nên, "did" cho đi), thay mức phạt chung
+//!   khi người này gõ kiểu đó thường hơn (`late_rate`).
 
 use std::collections::HashMap;
 
@@ -12,6 +14,16 @@ pub struct Memory {
     follow: HashMap<String, Follow>,
     chosen: HashMap<String, f64>,
     rejected: HashMap<String, f64>,
+    /// Số từ Việt đã chốt có â/ê/ô, trong đó gõ mũ muộn; số từ có đ, trong đó gõ đ muộn.
+    habit: [f64; 4],
+}
+
+/// Độ mạnh của mức phạt chung khi ước tỉ lệ riêng: như thể đã thấy ngần này từ gõ đúng theo mức chung.
+const HABIT_PRIOR: f64 = 50.0;
+
+/// Tỉ lệ gõ muộn của người này, làm mượt về `base`; không thấp hơn `base` (người chưa từng gõ muộn giữ mức chung).
+fn rate(opp: f64, used: f64, base: f64) -> f64 {
+    ((used + base * HABIT_PRIOR) / (opp + HABIT_PRIOR)).max(base)
 }
 
 impl Memory {
@@ -53,14 +65,44 @@ impl Memory {
         self.chosen.is_empty()
     }
 
+    /// Không có gì để lưu (cả thói quen gõ).
+    pub fn is_blank(&self) -> bool {
+        self.chosen.is_empty() && self.rejected.is_empty() && self.follow.is_empty() && self.habit == [0.0; 4]
+    }
+
+    /// Một từ Việt vừa chốt xong: có â/ê/ô (`hat`) và mũ gõ muộn (`late`); có đ (`d`) và đ gõ muộn (`late_d`).
+    pub fn observe(&mut self, hat: bool, late: bool, d: bool, late_d: bool) {
+        let add = |x: &mut f64, b: bool| *x += f64::from(u8::from(b));
+        add(&mut self.habit[0], hat);
+        add(&mut self.habit[1], hat && late);
+        add(&mut self.habit[2], d);
+        add(&mut self.habit[3], d && late_d);
+    }
+
+    /// Mức phạt mũ gõ muộn cho người này (`base`: mức chung).
+    pub fn late_rate(&self, base: f64) -> f64 {
+        rate(self.habit[0], self.habit[1], base)
+    }
+
+    /// Mức phạt đ gõ muộn cho người này.
+    pub fn late_d_rate(&self, base: f64) -> f64 {
+        rate(self.habit[2], self.habit[3], base)
+    }
+
     /// Số từ đã học (được chọn ít nhất một lần khi lật).
     pub fn len(&self) -> usize {
         self.chosen.len()
     }
 
-    /// Lưu dạng TSV: "pair<TAB>trước<TAB>từ<TAB>số" và "pref<TAB>từ<TAB>chọn<TAB>bỏ".
+    /// Lưu dạng TSV: "pair<TAB>trước<TAB>từ<TAB>số", "pref<TAB>từ<TAB>chọn<TAB>bỏ" và
+    /// "habit<TAB>late|late_d<TAB>số từ có thể gõ muộn<TAB>số từ gõ muộn".
     pub fn save(&self) -> String {
         let mut out = String::new();
+        for (name, i) in [("late", 0), ("late_d", 2)] {
+            if self.habit[i] > 0.0 {
+                out += &format!("habit\t{name}\t{}\t{}\n", self.habit[i], self.habit[i + 1]);
+            }
+        }
         for (p, f) in &self.follow {
             for (w, n) in &f.succ {
                 out += &format!("pair\t{p}\t{}\t{n}\n", w.key);
@@ -84,6 +126,15 @@ impl Memory {
                 ["pref", w, c, r] => {
                     m.chosen.insert(w.to_string(), c.parse().unwrap_or(0.0));
                     m.rejected.insert(w.to_string(), r.parse().unwrap_or(0.0));
+                }
+                ["habit", name, o, u] => {
+                    let i = match *name {
+                        "late" => 0,
+                        "late_d" => 2,
+                        _ => continue,
+                    };
+                    m.habit[i] = o.parse().unwrap_or(0.0);
+                    m.habit[i + 1] = u.parse().unwrap_or(0.0);
                 }
                 _ => {}
             }
@@ -134,6 +185,16 @@ pub fn learned(text: &str) -> Vec<Learned> {
     out
 }
 
+/// Thói quen gõ trong file bộ nhớ: (tên, số từ có thể gõ muộn, số từ gõ muộn) cho "late" (mũ) và "late_d" (đ).
+pub fn habits(text: &str) -> Vec<(String, f64, f64)> {
+    text.lines()
+        .filter_map(|line| match line.split('\t').collect::<Vec<_>>().as_slice() {
+            ["habit", name, o, u] => Some((name.to_string(), o.parse().unwrap_or(0.0), u.parse().unwrap_or(0.0))),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Bỏ mọi dòng về từ `key` (ưu tiên và các cặp ngữ cảnh chọn nó), giữ nguyên phần còn lại của file.
 pub fn forget_key(text: &str, key: &str) -> String {
     text.lines()
@@ -154,6 +215,22 @@ mod tests {
         assert_eq!(l.iter().map(|e| e.key.as_str()).collect::<Vec<_>>(), ["via1", "visa"]);
         assert_eq!((l[0].chosen, l[0].rejected), (3.0, 1.0));
         assert_eq!(l[0].contexts, vec![("<s>".to_string(), 2.0), ("thôi".to_string(), 1.0)]);
+    }
+
+    #[test]
+    fn habits_survive_a_save_and_stay_out_of_the_word_list() {
+        let vn = VnLex::build("nên 10\n");
+        let mut m = Memory::load(&format!("{FILE}habit\tlate\t200\t120\n"), &vn);
+        m.observe(true, true, true, false);
+        let saved = m.save();
+        assert!(saved.contains("habit\tlate\t201\t121\n") && saved.contains("habit\tlate_d\t1\t0\n"));
+        assert_eq!(habits(&saved), vec![("late".into(), 201.0, 121.0), ("late_d".into(), 1.0, 0.0)]);
+        assert_eq!(learned(&saved).len(), 2);
+        assert!(forget_key(&saved, "via1").contains("habit\tlate\t201"));
+        // gõ muộn 60%: mức phạt theo người này; chưa từng gõ muộn: giữ mức chung
+        assert!((m.late_rate(0.01) - (121.0 + 0.5) / 251.0).abs() < 1e-9);
+        assert_eq!(Memory::default().late_rate(0.01), 0.01);
+        assert!(!m.is_blank() && Memory::default().is_blank());
     }
 
     #[test]

@@ -10,7 +10,7 @@ Không có chế độ Anh/Việt: mỗi phím chạy song song nhánh Telex và
 - `context.rs`: học từ văn bản song ngữ; bảng cặp từ CSR (số hiệu từ xếp theo dạng không dấu, 8 byte mỗi cặp, cờ lớp từ để cộng tiền tố không đọc chuỗi). Trigram đã thử (cắt ≥3/5/10): không đổi từ sai nào trên dev, file nặng thêm 10-21 MB, nên không dùng.
 - `store.rs`: định dạng nhị phân của mô hình, mmap, kiểm biên và UTF-8 một lần lúc nạp.
 - `engine.rs`: `P(w | trước) = λ·bigram + (1-λ)·P(tiếng | lịch sử)·P(w | tiếng)`, nhân hệ số chữ hoa và kiểu nối; giữa từ dùng cùng công thức cho tiền tố. Dấu ngăn cách chờ tới phím đầu của từ sau mới áp vào ngữ cảnh: dính liền hai từ thì `.` không phải hết câu. `P(tiếng | lịch sử)` trộn xác suất học từ corpus với tỉ lệ Anh/Việt 20 từ vừa gõ.
-- `memory.rs`: mỗi lần lật cộng cặp (từ trước, từ được chọn) với trọng số 20 lần gặp, và hệ số ưu tiên theo từ.
+- `memory.rs`: mỗi lần lật cộng cặp (từ trước, từ được chọn) với trọng số 20 lần gặp, và hệ số ưu tiên theo từ. Thói quen gõ: đếm từ Việt đã chốt có â/ê/ô (có đ) và bao nhiêu từ gõ mũ (đ) muộn; mức phạt mũ/đ muộn của người này là tỉ lệ đó, làm mượt về mức chung như đã thấy 50 từ, không thấp hơn mức chung. Chỉ lưu hai cặp số; từ chỉ được tính khi đã thôi lật được.
 - `ime.rs`: logic phím độc lập hệ điều hành (nhìn từ sau, thay chữ trước con trỏ, mở lại từ, lật, phát hiện app không thay được chữ). `ffi.rs`: C ABI cho lớp OS. `settings.rs`: app bỏ qua/kiểu code/chặn phím (đánh dấu app bộ gõ tự thêm), tuỳ chọn.
 - `typing.rs`: người gõ giả lập cho bộ đo (xem `evaluation.md`).
 
