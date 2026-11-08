@@ -59,7 +59,7 @@ cargo run --release -- save-model models/model.bin \
 
 ```sh
 platform/macos/build.sh             # -> target/Songngu.app (arm64 + x86_64 nếu có target x86_64-apple-darwin), kèm cửa sổ cài đặt
-# chụp trang N (0-4) của cửa sổ cài đặt ra PNG, sáng hoặc tối; không cần quyền Ghi màn hình, chạy được cả khi máy khoá
+# chụp trang N (0-5) của cửa sổ cài đặt ra PNG, sáng hoặc tối; không cần quyền Ghi màn hình, chạy được cả khi máy khoá
 SONGNGU_PAGE=0 SONGNGU_APPEARANCE=dark SONGNGU_SCREENSHOT=/tmp/shots caffeinate -d -u \
   target/Songngu.app/Contents/Helpers/SongnguSettings.app/Contents/MacOS/SongnguSettings
 platform/macos/build.sh --install   # chép vào ~/Library/Input Methods và đăng ký nguồn nhập

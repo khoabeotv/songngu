@@ -1,5 +1,5 @@
 // Tự chụp cửa sổ ra PNG để xem giao diện khi không ngồi trước máy (kể cả lúc máy khoá màn hình):
-//   SONGNGU_SCREENSHOT=thư mục SONGNGU_PAGE=0..3 SONGNGU_APPEARANCE=light|dark SongnguSettings
+//   SONGNGU_SCREENSHOT=thư mục SONGNGU_PAGE=0..5 SONGNGU_APPEARANCE=light|dark SongnguSettings
 // Chụp cửa sổ của chính tiến trình không cần quyền Ghi màn hình. Mỗi lần chạy một trang: cửa sổ bị màn hình khoá che
 // thì không vẽ lại khi đổi trang.
 import AppKit

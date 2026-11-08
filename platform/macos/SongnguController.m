@@ -189,6 +189,7 @@ static void apply(SnAction a, id sender) {
     if (gEngine) sn_reload(gEngine);
     NSMenu *m = [[NSMenu alloc] initWithTitle:@"Songngu"];
     [m addItem:[[NSMenuItem alloc] initWithTitle:@"Cài đặt Songngu…" action:@selector(openSettings:) keyEquivalent:@""]];
+    [m addItem:[[NSMenuItem alloc] initWithTitle:@"Báo lỗi gõ…" action:@selector(openReport:) keyEquivalent:@""]];
     [m addItem:[NSMenuItem separatorItem]];
     NSString *front = keyTapFrontApp();
     NSMenuItem *exclude = [[NSMenuItem alloc] initWithTitle:@"Bỏ qua app này" action:@selector(toggleOption:) keyEquivalent:@""];
@@ -210,11 +211,31 @@ static void apply(SnAction a, id sender) {
     return m;
 }
 
-- (void)openSettings:(id)sender {
+// `page`: trang mở thẳng (nil: trang mặc định). Cửa sổ chưa chạy thì nhận qua tham số; đang chạy thì tham số bị bỏ qua,
+// nên báo thêm bằng thông báo phân tán.
+static void openSettingsPage(NSString *page) {
     NSURL *url = [[NSBundle mainBundle].bundleURL URLByAppendingPathComponent:@"Contents/Helpers/SongnguSettings.app"];
     NSWorkspaceOpenConfiguration *cfg = [NSWorkspaceOpenConfiguration configuration];
     cfg.activates = YES;
-    [[NSWorkspace sharedWorkspace] openApplicationAtURL:url configuration:cfg completionHandler:nil];
+    if (page) cfg.arguments = @[ @"--page", page ];
+    [[NSWorkspace sharedWorkspace] openApplicationAtURL:url
+                                          configuration:cfg
+                                      completionHandler:^(NSRunningApplication *app, NSError *err) {
+                                          if (!page || err) return;
+                                          [[NSDistributedNotificationCenter defaultCenter]
+                                              postNotificationName:@"com.songngu.settings.openPage"
+                                                            object:page
+                                                          userInfo:nil
+                                                     deliverImmediately:YES];
+                                      }];
+}
+
+- (void)openSettings:(id)sender {
+    openSettingsPage(nil);
+}
+
+- (void)openReport:(id)sender {
+    openSettingsPage(@"report");
 }
 
 static NSMenuItem *menuItem(id sender) {

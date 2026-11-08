@@ -57,6 +57,7 @@ platform/macos/build.sh --install
 | Mục | Ý nghĩa |
 |---|---|
 | Cài đặt Songngu… | Mở cửa sổ cài đặt (bên dưới) |
+| Báo lỗi gõ… | Mở thẳng trang Báo lỗi của cửa sổ cài đặt |
 | Bỏ qua app này | Songngu đứng ngoài app đang mở, phím đi thẳng vào app |
 | Chặn phím ở app này | Sửa chữ bằng Backspace giả thay vì thay chữ trực tiếp. Tự bật cho terminal và app không cho thay chữ; bật tay khi một app gõ ra chữ lặp ("taá") |
 | Cấp quyền Trợ năng… | Chỉ hiện khi chưa có quyền |
@@ -70,10 +71,11 @@ platform/macos/build.sh --install
 | Ứng dụng | App bỏ qua và app chặn phím: thêm, gỡ. App "tự phát hiện" là bộ gõ tự thêm, gỡ nếu app vẫn gõ đúng |
 | Đã học | Các từ học được từ những lần lật và ngữ cảnh của chúng; quên từng từ hoặc tất cả (file cũ giữ ở `memory-forgotten.tsv`) |
 | Trạng thái | Bộ gõ có đang chạy, quyền Trợ năng, bộ gõ chạy nền khác đang xung đột; tự động cập nhật và kiểm tra cập nhật; phiên bản, mô hình, giấy phép |
+| Báo lỗi | Mô tả lỗi, app đang gõ, vài chục dòng nhật ký gõ cuối (sửa được, xoá dòng riêng tư) và thông tin máy, rồi mở sẵn một issue trên GitHub. Chỉ mở trình duyệt khi bấm; issue là công khai |
 
 Sửa trong cửa sổ có hiệu lực ngay ở phím gõ tiếp theo.
 
-File người dùng nằm trong `~/Library/Application Support/Songngu/`: `memory.tsv` (lựa chọn đã học), `settings.tsv` (cài đặt, app bỏ qua/chặn phím), `typing-log.tsv` (nhật ký, nếu bật).
+File người dùng nằm trong `~/Library/Application Support/Songngu/`: `memory.tsv` (lựa chọn đã học), `settings.tsv` (cài đặt, app bỏ qua/chặn phím), `typing-log.tsv` (nhật ký, nếu bật; ghi cả bundle id app mỗi khi đổi app, để báo lỗi).
 
 ## Khắc phục sự cố
 

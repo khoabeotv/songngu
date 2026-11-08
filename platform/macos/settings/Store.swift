@@ -7,8 +7,15 @@ import UniformTypeIdentifiers
 import UserNotifications
 
 enum Page: String, CaseIterable, Identifiable {
-    case start, typing, apps, learned, status
+    case start, typing, apps, learned, status, report
     var id: Self { self }
+
+    /// `SongnguSettings --page report`: menu SN mở thẳng một trang.
+    static var fromArguments: Page? {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--page"), i + 1 < args.count else { return nil }
+        return Page(rawValue: args[i + 1])
+    }
 
     var title: String {
         switch self {
@@ -17,6 +24,7 @@ enum Page: String, CaseIterable, Identifiable {
         case .apps: return "Ứng dụng"
         case .learned: return "Đã học"
         case .status: return "Trạng thái"
+        case .report: return "Báo lỗi"
         }
     }
 
@@ -27,6 +35,7 @@ enum Page: String, CaseIterable, Identifiable {
         case .apps: return "square.grid.2x2.fill"
         case .learned: return "brain.head.profile"
         case .status: return "checkmark.shield.fill"
+        case .report: return "ladybug.fill"
         }
     }
 
@@ -37,6 +46,7 @@ enum Page: String, CaseIterable, Identifiable {
         case .apps: return .blue
         case .learned: return .pink
         case .status: return .green
+        case .report: return .red
         }
     }
 }
@@ -120,6 +130,8 @@ final class Store: ObservableObject {
     /// Lần kiểm tra cập nhật gần nhất (update.tsv), và đang kiểm tra/cài.
     @Published var updateInfo = ""
     @Published var checking = false
+    /// Trang menu SN yêu cầu mở khi cửa sổ đang chạy sẵn (thông báo phân tán từ bộ gõ).
+    @Published var requestedPage: Page?
 
     private var stamps: [Date?] = [nil, nil, nil]
     private var timer: Timer?
@@ -139,7 +151,16 @@ final class Store: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.reload(force: false) }
         }
+        DistributedNotificationCenter.default().addObserver(forName: Store.openPage, object: nil, queue: .main) { [weak self] n in
+            guard let page = (n.object as? String).flatMap(Page.init(rawValue:)) else { return }
+            Task { @MainActor in
+                self?.requestedPage = page
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
     }
+
+    static let openPage = Notification.Name("com.songngu.settings.openPage")
 
     private static func mtime(_ path: String) -> Date? {
         (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date

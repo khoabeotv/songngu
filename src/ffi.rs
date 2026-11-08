@@ -27,6 +27,8 @@ pub struct Handle {
     memory_stamp: Option<SystemTime>,
     checked: Option<Instant>,
     app: String,
+    /// App ghi gần nhất vào nhật ký gõ: dòng `app<TAB>bundle id` mỗi khi đổi, để báo lỗi biết lỗi xảy ra ở app nào.
+    logged_app: String,
     commit: CString,
     memory_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
@@ -185,6 +187,7 @@ pub unsafe extern "C" fn sn_create(
             memory_stamp,
             checked: None,
             app: String::new(),
+            logged_app: String::new(),
             commit: CString::default(),
             memory_path,
             settings_path,
@@ -208,6 +211,10 @@ pub unsafe extern "C" fn sn_set_app(h: *mut Handle, bundle: *const c_char) {
     h.refresh(true);
     if !h.broken {
         h.apply_settings();
+    }
+    if h.session.logging && h.logged_app != h.app {
+        h.logged_app = h.app.clone();
+        h.session.log.push(format!("app\t{}", h.app));
     }
 }
 

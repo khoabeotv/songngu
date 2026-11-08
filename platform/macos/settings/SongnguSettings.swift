@@ -22,7 +22,7 @@ struct SongnguSettingsApp: App {
     var body: some Scene {
         Window("Cài đặt Songngu", id: "main") {
             // chưa xong các bước cài đặt thì mở trang Bắt đầu
-            RootView(page: Capture.request?.page ?? (store.setupDone ? .typing : .start))
+            RootView(page: Capture.request?.page ?? Page.fromArguments ?? (store.setupDone ? .typing : .start))
                 .environmentObject(store)
                 .frame(minWidth: 640, minHeight: 440)
         }
@@ -86,9 +86,14 @@ struct RootView: View {
                 case .apps: AppsPage()
                 case .learned: LearnedPage()
                 case .status: StatusPage()
+                case .report: ReportPage()
                 }
             }
             .navigationTitle(current.title)
+        }
+        .onChange(of: store.requestedPage) { p in
+            if let p { page = p }
+            store.requestedPage = nil
         }
     }
 }
