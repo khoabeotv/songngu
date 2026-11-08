@@ -8,6 +8,7 @@
 
 use crate::context::{after_separator, all_caps, canon, case_class, join_class, key_to_word, Context, Successors, START};
 use crate::syllable::decompose;
+use unicode_normalization::UnicodeNormalization;
 use crate::lexicon::{compatible_prefix, EnLex, VnLex};
 use crate::memory::Memory;
 use crate::telex::{keys_for, Composer, TelexOpts};
@@ -158,6 +159,9 @@ const PERSONAL: f64 = 20.0;
 
 /// Số từ gần nhất dùng để ước tỉ lệ Anh/Việt của người đang gõ.
 const RECENT: usize = 20;
+
+/// Số từ cuối của chữ trước con trỏ được tính vào tiếng gần đây khi lấy lại ngữ cảnh (`resume`).
+const RESUME_WORDS: usize = 8;
 
 /// Trộn hai nguồn tần suất; None khi cả hai không biết từ/tiền tố này.
 fn mix(dom: Option<f64>, sub: Option<f64>, mu: f64) -> Option<f64> {
@@ -558,6 +562,78 @@ impl<'a> Engine<'a> {
         let lang = self.force.unwrap_or(lang);
         let text = if lang == Lang::Vn { vn_text.clone() } else { en_text.clone() };
         View { text, lang, vn_text, en_text, vn_p, en_p }
+    }
+
+    /// Ngữ cảnh vừa mất (click, đổi app, phím tắt, dán) mà app cho đọc chữ trước con trỏ: lấy lại từ trước và tiếng
+    /// của vài từ cuối từ chính chữ đó, thay vì coi như đầu câu. Gọi trước phím đầu của từ mới. Từ dính sát con trỏ là
+    /// việc của `reopen`.
+    pub fn resume(&mut self, before: &str) {
+        if !self.keys.is_empty() {
+            return;
+        }
+        let chars: Vec<char> = before.chars().collect();
+        let mut words = Vec::new();
+        let mut i = 0;
+        while i < chars.len() {
+            let s = i;
+            while i < chars.len() && chars[i].is_alphabetic() {
+                i += 1;
+            }
+            if i > s {
+                words.push((s, i));
+            } else {
+                i += 1;
+            }
+        }
+        let Some(&(ls, le)) = words.last() else { return };
+        if le == chars.len() {
+            return;
+        }
+        // App chỉ đưa vài chục ký tự: từ đầu có thể bị cắt.
+        let cut = usize::from(words.len() > 1 && words[0].0 == 0);
+        for &(s, e) in words.iter().skip(cut).rev().take(RESUME_WORDS).rev() {
+            let w: String = chars[s..e].iter().collect();
+            if let Some(l) = self.visible_lang(&w) {
+                self.prev2_lang = self.prev_lang;
+                self.prev_lang = Some(l);
+                self.recent.push_back(l);
+                if self.recent.len() > RECENT {
+                    self.recent.pop_front();
+                }
+            }
+        }
+        let last: String = chars[ls..le].iter().collect();
+        self.run.clear();
+        self.after_word = false;
+        self.set_prev(canon(&last));
+        self.prev_caps = all_caps(&last);
+        for &c in &chars[le..] {
+            if let Some(p) = after_separator(c) {
+                if self.prev != p {
+                    self.set_prev(p.into());
+                }
+            }
+        }
+        self.last = None;
+    }
+
+    /// Tiếng của một từ đã nằm trong app: so xác suất chữ đó là từ Việt và từ Anh, chênh dưới `informative_ratio`
+    /// thì không tính (như lúc chốt từ).
+    fn visible_lang(&self, w: &str) -> Option<Lang> {
+        let low: String = w.to_lowercase().nfc().collect();
+        let vn = decompose(&low).and_then(|(s, t)| {
+            let s: Vec<char> = s.chars().collect();
+            mix(self.ctx.and_then(|c| c.vn.word_prob(&s, t)), self.vn.word_prob(&s, t), self.mu())
+        });
+        let en = low.is_ascii().then(|| self.en_word(&low)).flatten();
+        match (vn, en) {
+            (Some(_), None) => Some(Lang::Vn),
+            (None, Some(_)) => Some(Lang::En),
+            (Some(v), Some(e)) if (v.ln() - e.ln()).abs() > self.cfg.informative_ratio.ln() => {
+                Some(if v > e { Lang::Vn } else { Lang::En })
+            }
+            _ => None,
+        }
     }
 
     /// Chốt từ ở ranh giới (space, dấu câu, Enter).

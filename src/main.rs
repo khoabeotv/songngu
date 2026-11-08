@@ -15,7 +15,8 @@ use songngu::engine::{Config, Engine, Lang, View};
 use songngu::syllable::split_tone;
 use songngu::typing::{scored_words, Habits, Typist, Unit, BS, SKIP};
 
-const VALUE_OPTS: [&str; 26] = [
+const VALUE_OPTS: [&str; 27] = [
+    "--clicks",
     "--bs-ratio",
     "--look-min",
     "--late-penalty",
@@ -167,7 +168,8 @@ fn main() {
             let show = arg(&args, "--show").map_or(0, |v| v.parse().unwrap());
             let mut t = typist(&args);
             let opts = (unsure, look, blind, margin, bs_ratio, look_min);
-            session_eval(eng, &pos[1], &mut t, opts, show, (dump.0.as_deref(), dump.1.as_deref()))
+            let sim = (arg(&args, "--clicks").map_or(0, |v| v.parse().unwrap()), !args.iter().any(|a| a == "--no-resume"));
+            session_eval(eng, &pos[1], &mut t, opts, show, (dump.0.as_deref(), dump.1.as_deref()), sim)
         }
         Some("score") => score_cmd(&pos[1], &pos[2], arg(&args, "--show").map_or(0, |v| v.parse().unwrap())),
         _ => eprintln!(
@@ -306,6 +308,7 @@ fn session_eval(
     opts: (f64, f64, bool, f64, Option<f64>, Option<f64>),
     mut show: usize,
     dump: (Option<&str>, Option<&str>),
+    sim: (usize, bool),
 ) {
     use songngu::ime::{Event, Session};
     use std::io::Write;
@@ -315,6 +318,9 @@ fn session_eval(
     let mut s = Session::new(eng);
     (s.unsure_ratio, s.lookahead_ratio, s.lookahead_margin) = (opts.0, opts.1, opts.3);
     s.blind = opts.2;
+    // `--clicks N`: cứ N từ thì giả như người dùng click/đổi app rồi quay lại gõ tiếp (ngữ cảnh mất, chữ vẫn trong app)
+    let (clicks, mut nword) = (sim.0, 0usize);
+    s.resume_context = sim.1;
     let (mut wrong, mut words) = (0usize, 0usize);
     // phím mà Esc lật từ đang gõ (hai phương án chênh dưới unsure_ratio)
     let (mut keys_n, mut keys_unsure) = (0usize, 0usize);
@@ -346,6 +352,10 @@ fn session_eval(
                 Unit::Word { keys, want: w } => {
                     want += &w;
                     last_w = Some(w.clone());
+                    nword += 1;
+                    if clicks > 0 && nword % clicks == 0 && !doc.is_empty() {
+                        s.commit_all();
+                    }
                     for k in keys.chars() {
                         press(&mut s, &mut doc, if k == BS { Event::Backspace } else { Event::Char(k) });
                         let v = s.eng.view();

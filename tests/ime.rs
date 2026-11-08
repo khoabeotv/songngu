@@ -538,3 +538,24 @@ fn app_that_hides_its_text_still_gets_rewrites_by_position() {
     assert!(!s.blind);
     assert!(!s.take_direct_broke());
 }
+
+#[test]
+fn context_lost_by_a_click_comes_back_from_the_text_before_the_cursor() {
+    // Gõ tiếng Anh ở một ô, "|" (click/đổi app) sang ô khác đã có "cầu ": từ sau đọc lại ngữ cảnh từ chữ trước con trỏ
+    // ("cầu vía" hay gặp), không đoán theo tiếng Anh vừa gõ ở ô cũ.
+    let (vn, en) = lex();
+    let run = |resume: bool, other: &str| {
+        let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx()));
+        s.resume_context = resume;
+        let mut app = App::default();
+        app.run(&mut s, "please check the deploy log |");
+        app.doc = other.into();
+        app.run(&mut s, "visa ");
+        app.doc.clone()
+    };
+    assert_eq!(run(true, "cầu "), "cầu vía ");
+    assert_eq!(run(false, "cầu "), "cầu visa ");
+    // hết câu trước con trỏ: từ sau vẫn là đầu câu
+    assert_eq!(run(true, "please check the log. "), "please check the log. visa ");
+}
+

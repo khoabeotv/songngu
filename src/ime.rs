@@ -199,6 +199,11 @@ pub struct Session<'a> {
     direct_broke: bool,
     /// Từ đang gõ bắt đầu ở chỗ không đọc được chữ: không kiểm con trỏ, tin vào chữ đã theo dõi như đường xoá lùi.
     untracked: bool,
+    /// Ngữ cảnh vừa mất (`commit_all`, `lose_track`): từ sau lấy lại ngữ cảnh từ chữ trước con trỏ nếu đọc được
+    /// (`Engine::resume`).
+    resync: bool,
+    /// Tắt `resync` (để đo).
+    pub resume_context: bool,
     tail: Option<Tail>,
     keys: String,
     history: VecDeque<Recent>,
@@ -288,6 +293,8 @@ impl<'a> Session<'a> {
             rewrote: false,
             direct_broke: false,
             untracked: false,
+            resync: true,
+            resume_context: true,
             tail: None,
             keys: String::new(),
             history: VecDeque::new(),
@@ -384,6 +391,7 @@ impl<'a> Session<'a> {
         self.tail = None;
         self.forget_retype();
         self.eng.separator('\n');
+        self.resync = true;
     }
 
     fn forget_retype(&mut self) {
@@ -579,7 +587,12 @@ impl<'a> Session<'a> {
                 // từ dính trước con trỏ đã nằm trong app: gõ tiếp vào chính nó
                 self.shown = w;
                 self.tail = None;
+            } else if self.resync && self.resume_context && !self.trusting() {
+                if let Some(b) = before {
+                    self.eng.resume(b);
+                }
             }
+            self.resync = false;
         }
         self.del_from = None;
         self.deleting = None;
@@ -812,6 +825,7 @@ impl<'a> Session<'a> {
         self.tail = None;
         self.forget_retype();
         self.eng.separator('\n');
+        self.resync = true;
     }
 }
 

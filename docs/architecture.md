@@ -48,7 +48,7 @@ Hành vi chung:
 - **Gõ lại là lật**: xoá hết một từ mà hai phương án đều đáng kể (đang gõ dở, hoặc từ vừa chốt sau khi đã xoá dấu ngăn cách) rồi gõ ngay ra đúng cặp phương án đó thì ép phương án còn lại, ghi nhớ như một lần lật. Gõ khác đi hoặc sang từ khác thì thôi.
 - Mỗi lần lật được nhớ vào `memory.tsv` (`memory.rs`).
 - Backspace trong từ xoá chữ đang hiện, giữ dấu ("tiếng" -> "tiến"); chỉ mất chữ cuối thì để chính phím Backspace đi vào app. Gõ ngay sau một từ đã có thì mở lại từ đó ("tiêng" + s -> "tiếng"). Không đọc được chữ (chặn phím, ô không cho đọc) thì chỉ mở lại từ vừa gõ khi đã xoá hết dấu ngăn cách sau nó (gõ "tieeng ", Backspace, s -> "tiếng").
-- Enter, Tab, mũi tên, phím tắt, click chuột: kết thúc từ (sửa nốt chữ nếu cần) rồi để app xử lý.
+- Enter, Tab, mũi tên, phím tắt, click chuột: kết thúc từ (sửa nốt chữ nếu cần) rồi để app xử lý. Ngữ cảnh mất theo: phím đầu của từ sau đọc chữ trước con trỏ (app cho đọc), lấy từ cuối làm từ trước và tính tiếng của tối đa 8 từ cuối vào tỉ lệ Anh/Việt gần đây (`Engine::resume`). Hết câu trước con trỏ thì vẫn là đầu câu; từ dính sát con trỏ thì mở lại từ đó như trên.
 - Terminal/IDE (danh sách trong `src/settings.rs`) nghiêng tiếng Anh ×5, Esc là của app.
 - Engine lỗi (panic) thì bộ gõ tự tắt, phím đi thẳng vào app.
 
