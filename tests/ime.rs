@@ -581,3 +581,25 @@ fn a_late_hat_habit_is_learned_and_changes_the_close_calls() {
     app.run(&mut s, "theme ");
     assert_eq!(app.doc, "theme ");
 }
+
+#[test]
+fn two_swapped_keys_still_give_the_vietnamese_word() {
+    // nyaf -> này, ddwang -> đăng: phím đảo không thành âm tiết thì thử đảo lại hai phím liền nhau, chốt ở dấu cách
+    for mut s in [session(), blind()] {
+        let mut app = App::default();
+        app.run(&mut s, "nyaf ddwang nhaapj ");
+        assert_eq!(app.doc, "này đăng nhập ");
+    }
+    // viết tắt toàn hoa gõ đúng như vậy
+    let mut s = session();
+    let mut app = App::default();
+    assert_eq!(app.run(&mut s, "CSO ").doc, "CSO ");
+    // lật bỏ từ bộ gõ tự sửa: nhớ giữ "nyaf" ở đây, không trừ điểm "này" ở chỗ khác; lật lại thì quên hết
+    let mut s = session();
+    let mut app = App::default();
+    assert_eq!(app.run(&mut s, "nyaf ^").doc, "nyaf ");
+    let saved = s.eng.memory().save();
+    assert!(saved.contains("pair\t<s>\tnyaf\t1\n") && !saved.contains("nay2"), "{saved}");
+    assert_eq!(app.run(&mut s, "^").doc, "này ");
+    assert!(s.eng.memory().is_empty(), "{}", s.eng.memory().save());
+}

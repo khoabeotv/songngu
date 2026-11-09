@@ -66,6 +66,9 @@ pub struct Config {
     pub informative_ratio: f64,
     /// Học thói quen gõ mũ/đ muộn của từng người (`Memory::late_rate`) thay vì chỉ dùng mức phạt chung.
     pub adapt: bool,
+    /// Phạt từ Việt sửa từ hai phím gõ đảo (`swap_repair`); 0 tắt. Dev: 1e-3/1e-5/1e-7 cho 345/332/332 từ sai khi gõ
+    /// thường (tắt: 334; mạnh tay thì itm -> tim, ib -> bi) và 733/789/999 khi 5% từ có dấu gõ đảo (tắt: 3659).
+    pub swap_penalty: f64,
 }
 
 impl Default for Config {
@@ -89,6 +92,7 @@ impl Default for Config {
             late_d_penalty: 0.3,
             informative_ratio: 10.0,
             adapt: true,
+            swap_penalty: 1e-5,
         }
     }
 }
@@ -156,6 +160,8 @@ struct Last {
     both_real: bool,
     /// Cách gõ phương án Việt: (có â/ê/ô, mũ gõ muộn, có đ, đ gõ muộn). Tính vào thói quen khi từ đã thôi lật được.
     habit: (bool, bool, bool, bool),
+    /// Phương án Việt do sửa gõ đảo phím (`swap_repair`): lật bỏ nó thì không trừ điểm từ Việt đó (`learn_pair`).
+    repaired: bool,
 }
 
 /// Mỗi lần người dùng lật từ bằng ngang ngần này lần gặp cặp từ đó trong corpus: một lần sửa đã đủ để lần sau
@@ -297,13 +303,56 @@ impl<'a> Engine<'a> {
     /// P(phím | từ Việt) thô: người gõ Telex hiếm khi đổi dấu thanh giữa chừng hay thêm mũ/móc sau dấu thanh
     /// ("these" -> thế, "CORS" -> CÓ), nên chuỗi phím kiểu đó nghiêng về tiếng Anh.
     fn order_penalty(&self) -> f64 {
+        self.order_penalty_of(&self.comp)
+    }
+
+    fn order_penalty_of(&self, comp: &Composer) -> f64 {
         let (late, late_d) = if self.cfg.adapt {
             (self.memory.late_rate(self.cfg.late_penalty), self.memory.late_d_rate(self.cfg.late_d_penalty))
         } else {
             (self.cfg.late_penalty, self.cfg.late_d_penalty)
         };
-        let d = if self.comp.late_d { late_d } else { 1.0 };
-        self.cfg.odd_penalty.powi(self.comp.odd as i32) * late.powi(self.comp.late as i32) * d
+        let d = if comp.late_d { late_d } else { 1.0 };
+        self.cfg.odd_penalty.powi(comp.odd as i32) * late.powi(comp.late as i32) * d
+    }
+
+    /// Phím gõ không thành âm tiết Việt: thử đảo hai phím liền nhau (nyaf -> nayf "này", ddwang -> ddawng "đăng"). Chỉ
+    /// nhận từ có trong từ điển; trả (chữ, xác suất đã nhân `swap_penalty`) của cách đảo khá nhất. Gõ lặp để huỷ dấu
+    /// (thiss) là cố ý, không sửa.
+    fn swap_repair(&self) -> Option<(String, f64)> {
+        // viết tắt toàn hoa (CSO) là gõ đúng như vậy
+        if self.cfg.swap_penalty <= 0.0 || self.comp.undone || all_caps(&self.keys) {
+            return None;
+        }
+        let ks: Vec<char> = self.keys.chars().collect();
+        let mut best: Option<(String, f64)> = None;
+        for i in 0..ks.len().saturating_sub(1) {
+            if ks[i].eq_ignore_ascii_case(&ks[i + 1]) || !ks[i].is_alphabetic() || !ks[i + 1].is_alphabetic() {
+                continue;
+            }
+            let mut c = Composer::new(self.cfg.telex);
+            for (j, &k) in ks.iter().enumerate() {
+                c.push(if j == i { ks[i + 1] } else if j == i + 1 { ks[i] } else { k });
+            }
+            let (s, t) = (c.toneless(), c.tone);
+            let Some(u) = mix(self.ctx.and_then(|x| x.vn.word_prob(&s, t)), self.vn.word_prob(&s, t), self.mu()) else {
+                continue;
+            };
+            // đổi dấu thanh giữa chừng (xof -> oxf "ò") không phải một từ gõ đúng bị đảo phím
+            if c.undone || c.odd > 0 {
+                continue;
+            }
+            let text = c.render(self.cfg.modern);
+            let key = canon(&text);
+            let p = self.cfg.swap_penalty
+                * self.order_penalty_of(&c)
+                * self.memory.preference(&key)
+                * self.contextual(Lang::Vn, u, |f| f.count(&key));
+            if best.as_ref().is_none_or(|b| p > b.1) {
+                best = Some((text, p));
+            }
+        }
+        best
     }
 
     /// Từ vừa chốt thôi lật được: nếu cuối cùng là từ Việt thì tính cách gõ của nó vào thói quen.
@@ -658,11 +707,15 @@ impl<'a> Engine<'a> {
 
     /// Chốt từ ở ranh giới (space, dấu câu, Enter).
     pub fn commit(&mut self) -> View {
-        let vn_text = self.vn_text();
-        let vn_key = canon(&vn_text);
-        let vn_p = self.vn_word().map(|u| {
-            self.order_penalty() * self.memory.preference(&vn_key) * self.contextual(Lang::Vn, u, |f| f.count(&vn_key))
-        });
+        let (vn_text, vn_p, repaired) = match self.vn_word() {
+            Some(u) => {
+                let t = self.vn_text();
+                let k = canon(&t);
+                let p = self.order_penalty() * self.memory.preference(&k) * self.contextual(Lang::Vn, u, |f| f.count(&k));
+                (t, Some(p), false)
+            }
+            None => self.swap_repair().map_or_else(|| (self.vn_text(), None, false), |(t, p)| (t, Some(p), true)),
+        };
         let (en_text, en_low, en_u) = self.en_side(|w| self.en_word(w), true);
         let both_real = vn_text != en_text && self.vn_known() && self.en_word(&en_low).is_some();
         let en_key = canon(&en_text);
@@ -683,7 +736,11 @@ impl<'a> Engine<'a> {
         let lang = match self.force.take() {
             Some(f) if f != lang && vn_text != en_text => {
                 if self.cfg.learn {
-                    self.memory.learn(&self.prev, &canon(pick(lang)), &canon(pick(f)), self.vn);
+                    if repaired && lang == Lang::Vn {
+                        self.memory.learn_pair(&self.prev, &canon(pick(f)), self.vn);
+                    } else {
+                        self.memory.learn(&self.prev, &canon(pick(lang)), &canon(pick(f)), self.vn);
+                    }
                 }
                 informative = true;
                 f
@@ -718,6 +775,7 @@ impl<'a> Engine<'a> {
             learned,
             both_real,
             habit,
+            repaired,
         });
         self.keys.clear();
         self.comp = Composer::new(self.cfg.telex);
@@ -809,10 +867,13 @@ impl<'a> Engine<'a> {
         let chosen = last.lang != last.natural;
         if self.cfg.learn && chosen != last.learned {
             let (nat, alt) = (canon(&text(last, last.natural)), canon(&text(last, other(last.natural))));
-            if chosen {
-                self.memory.learn(&last.prev, &nat, &alt, self.vn);
-            } else {
-                self.memory.unlearn(&last.prev, &nat, &alt);
+            // bỏ từ Việt bộ gõ tự sửa từ phím gõ đảo: chỉ nhớ cặp từ ở ngữ cảnh này
+            let pair_only = last.repaired && last.natural == Lang::Vn;
+            match (chosen, pair_only) {
+                (true, false) => self.memory.learn(&last.prev, &nat, &alt, self.vn),
+                (true, true) => self.memory.learn_pair(&last.prev, &alt, self.vn),
+                (false, false) => self.memory.unlearn(&last.prev, &nat, &alt),
+                (false, true) => self.memory.unlearn_pair(&last.prev, &alt),
             }
             last.learned = chosen;
         }

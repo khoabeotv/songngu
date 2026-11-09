@@ -29,9 +29,20 @@ fn rate(opp: f64, used: f64, base: f64) -> f64 {
 impl Memory {
     /// Người dùng bỏ `rejected`, chọn `chosen` ngay sau `prev` (đều ở dạng khoá `canon`).
     pub fn learn(&mut self, prev: &str, rejected: &str, chosen: &str, vn: &VnLex) {
+        self.learn_pair(prev, chosen, vn);
+        *self.rejected.entry(rejected.to_string()).or_default() += 1.0;
+    }
+
+    /// Như `learn` nhưng không trừ điểm từ bị bỏ: từ đó không phải chữ người dùng gõ ra mà bộ gõ tự sửa (gõ đảo phím),
+    /// bỏ nó không có nghĩa là người dùng không muốn từ đó ở chỗ khác.
+    pub fn learn_pair(&mut self, prev: &str, chosen: &str, vn: &VnLex) {
         self.follow.entry(prev.to_string()).or_default().add(chosen, 1.0, vn);
         *self.chosen.entry(chosen.to_string()).or_default() += 1.0;
-        *self.rejected.entry(rejected.to_string()).or_default() += 1.0;
+    }
+
+    /// Huỷ một lần `learn_pair` cùng tham số.
+    pub fn unlearn_pair(&mut self, prev: &str, chosen: &str) {
+        self.unlearn(prev, "", chosen);
     }
 
     /// Huỷ một lần `learn` cùng tham số (người dùng lật nhầm rồi trả lại ngay).

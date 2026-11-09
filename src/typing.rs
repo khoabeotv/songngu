@@ -23,11 +23,13 @@ pub struct Habits {
     pub fixed_typo: f64,
     /// Tỉ lệ từ gõ nhầm không sửa (thay phím bên cạnh, sót, lặp hoặc đảo phím).
     pub typo: f64,
+    /// Tỉ lệ từ có dấu gõ đảo hai phím liền nhau, vẫn chấm theo chữ đúng (đo sửa gõ đảo: nyaf -> này).
+    pub swap: f64,
 }
 
 impl Habits {
     pub fn realistic() -> Self {
-        Habits { mid_tone: 0.3, late_w: 0.2, late_hat: 0.2, late_d: 0.2, fixed_typo: 0.03, typo: 0.0 }
+        Habits { mid_tone: 0.3, late_w: 0.2, late_hat: 0.2, late_d: 0.2, fixed_typo: 0.03, typo: 0.0, swap: 0.0 }
     }
 }
 
@@ -146,6 +148,18 @@ impl Typist {
             }
             if toned && self.chance(self.habits.mid_tone) {
                 keys = mid_tone(&keys).filter(|k| telex(k, true) == shown).unwrap_or(keys);
+            }
+        }
+        // chỉ rút số ngẫu nhiên khi bật, để các cách gõ khác giữ nguyên chuỗi ngẫu nhiên cũ
+        if !w.is_ascii() && self.habits.swap > 0.0 && self.chance(self.habits.swap) {
+            let ks: Vec<char> = keys.chars().collect();
+            if ks.len() > 1 {
+                let p = self.pick(ks.len() - 1);
+                if ks[p] != ks[p + 1] {
+                    let mut s = ks.clone();
+                    s.swap(p, p + 1);
+                    return Some((s.into_iter().collect(), w.to_string()));
+                }
             }
         }
         if self.chance(self.habits.typo) {

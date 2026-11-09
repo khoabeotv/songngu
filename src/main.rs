@@ -15,7 +15,9 @@ use songngu::engine::{Config, Engine, Lang, View};
 use songngu::syllable::split_tone;
 use songngu::typing::{scored_words, Habits, Typist, Unit, BS, SKIP};
 
-const VALUE_OPTS: [&str; 31] = [
+const VALUE_OPTS: [&str; 33] = [
+    "--swap-penalty",
+    "--swaps",
     "--clicks",
     "--late-hat",
     "--late-w",
@@ -121,6 +123,9 @@ fn main() {
     }
     cfg.learn = !args.iter().any(|a| a == "--no-learn");
     cfg.adapt = !args.iter().any(|a| a == "--no-adapt");
+    if let Some(v) = arg(&args, "--swap-penalty") {
+        cfg.swap_penalty = v.parse().unwrap();
+    }
     cfg.modern = !args.iter().any(|a| a == "--classic");
     let t = Instant::now();
     let ctx = match arg(&args, "--ctx") {
@@ -188,6 +193,9 @@ fn typist(args: &[String]) -> Typist {
     let mut h = if args.iter().any(|a| a == "--realistic") { Habits::realistic() } else { Habits::default() };
     if let Some(v) = arg(args, "--typos") {
         h.typo = v.parse().unwrap();
+    }
+    if let Some(v) = arg(args, "--swaps") {
+        h.swap = v.parse().unwrap();
     }
     // người gõ dấu muộn nhiều hơn mức --realistic (đo học thói quen)
     for (name, field) in [("--late-hat", &mut h.late_hat), ("--late-w", &mut h.late_w), ("--late-d-rate", &mut h.late_d), ("--mid-tone", &mut h.mid_tone)] {
