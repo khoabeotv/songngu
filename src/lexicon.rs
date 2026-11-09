@@ -138,6 +138,11 @@ impl VnLex {
         Ok(VnLex::assemble(entries, abbr, tc[0], tc[1]))
     }
 
+    /// Tổng số đếm: xác suất × `total` = số lần gặp.
+    pub fn total(&self) -> f64 {
+        self.total
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -313,6 +318,11 @@ impl EnLex {
             row.copy_from_slice(&p[i * 27..i * 27 + 27]);
         }
         Ok(EnLex { words, cum, total, chars })
+    }
+
+    /// Tổng số đếm: xác suất × `total` = số lần gặp.
+    pub fn total(&self) -> f64 {
+        self.total
     }
 
     pub fn len(&self) -> usize {

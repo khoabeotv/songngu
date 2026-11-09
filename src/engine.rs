@@ -66,6 +66,9 @@ pub struct Config {
     pub informative_ratio: f64,
     /// Học thói quen gõ mũ/đ muộn của từng người (`Memory::late_rate`) thay vì chỉ dùng mức phạt chung.
     pub adapt: bool,
+    /// Lúc chốt từ, hai phương án chênh dưới ngần này lần thì giữ phương án đang hiện (1 tắt). Dev: 1/1,5/2/2,5/3/4/10
+    /// cho 317/316/307/307/309/317/328 từ sai.
+    pub commit_stick: f64,
     /// Phạt từ Việt sửa từ hai phím gõ đảo (`swap_repair`); 0 tắt. Dev: 1e-3/1e-5/1e-7 cho 345/332/332 từ sai khi gõ
     /// thường (tắt: 334; mạnh tay thì itm -> tim, ib -> bi) và 733/789/999 khi 5% từ có dấu gõ đảo (tắt: 3659).
     pub swap_penalty: f64,
@@ -93,6 +96,7 @@ impl Default for Config {
             informative_ratio: 10.0,
             adapt: true,
             swap_penalty: 1e-5,
+            commit_stick: 2.0,
         }
     }
 }
@@ -725,6 +729,13 @@ impl<'a> Engine<'a> {
             (Some(_), None) => Lang::Vn,
             _ => Lang::En,
         };
+        // Chênh ít thì giữ chữ đang hiện: người gõ đã thấy "á" lúc gõ thì đổi thành "as" lúc bấm cách trông như lỗi
+        // (cả từ còn tiền tố chung, cả từ chốt đều chỉ là ước lượng).
+        let stick = self.cfg.commit_stick;
+        let lang = match (self.shown, vn_p, en_p) {
+            (Some(sh), Some(v), Some(e)) if sh != lang && vn_text != en_text && (v.ln() - e.ln()).abs() < stick.ln() => sh,
+            _ => lang,
+        };
         // Chỉ từ nói rõ thứ tiếng mới đổi "tiếng của từ trước".
         let mut informative = match (vn_p, en_p) {
             (Some(_), None) | (None, Some(_)) => true,
@@ -854,7 +865,40 @@ impl<'a> Engine<'a> {
         self.toggle_last()
     }
 
+    /// Chữ đang hiện của từ vừa chốt (còn lật được).
+    pub fn last_text(&self) -> Option<&str> {
+        self.last.as_ref().map(|l| if l.lang == Lang::Vn { l.vn_text.as_str() } else { l.en_text.as_str() })
+    }
+
+    /// Đổi từ vừa chốt sang phương án kia như thể engine tự chọn nó (không học, Backspace/Esc sau đó lật lại và học
+    /// như thường): dùng khi biết thêm từ vừa chốt đứng cuối câu (`end_rate`).
+    pub fn prefer_last(&mut self) -> Option<(String, String)> {
+        let r = self.toggle_last_with(false);
+        if let Some(l) = self.last.as_mut() {
+            l.natural = l.lang;
+        }
+        r
+    }
+
+    /// P(hết câu ngay sau từ `key`, khoá `canon`), ước từ corpus: số lần gặp từ trừ số lần có từ theo sau trong cùng câu
+    /// (hết câu, hết dòng, hay số thì không có cặp từ). None khi không có ngữ cảnh.
+    pub fn end_rate(&self, key: &str) -> Option<f64> {
+        let c = self.ctx.filter(|_| self.cfg.bigram)?;
+        let word = key_to_word(key);
+        let vn = decompose(&word)
+            .and_then(|(s, t)| c.vn.word_prob(&s.chars().collect::<Vec<_>>(), t))
+            .map_or(0.0, |p| p * c.vn.total());
+        let en = word.is_ascii().then(|| c.en.word_prob(&word)).flatten().map_or(0.0, |p| p * c.en.total());
+        let n = vn.max(en);
+        let follow = c.follow(key).map_or(0.0, |f| f.total());
+        Some(((n - follow).max(0.0) + 0.5) / (n + 1.0))
+    }
+
     fn toggle_last(&mut self) -> Option<(String, String)> {
+        self.toggle_last_with(true)
+    }
+
+    fn toggle_last_with(&mut self, learn: bool) -> Option<(String, String)> {
         let last = self.last.as_mut()?;
         if last.vn_text == last.en_text {
             return None;
@@ -865,7 +909,7 @@ impl<'a> Engine<'a> {
         let new = text(last, last.lang);
         let (old_key, new_key) = (canon(&old), canon(&new));
         let chosen = last.lang != last.natural;
-        if self.cfg.learn && chosen != last.learned {
+        if learn && self.cfg.learn && chosen != last.learned {
             let (nat, alt) = (canon(&text(last, last.natural)), canon(&text(last, other(last.natural))));
             // bỏ từ Việt bộ gõ tự sửa từ phím gõ đảo: chỉ nhớ cặp từ ở ngữ cảnh này
             let pair_only = last.repaired && last.natural == Lang::Vn;

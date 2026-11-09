@@ -15,7 +15,9 @@ use songngu::engine::{Config, Engine, Lang, View};
 use songngu::syllable::split_tone;
 use songngu::typing::{scored_words, Habits, Typist, Unit, BS, SKIP};
 
-const VALUE_OPTS: [&str; 33] = [
+const VALUE_OPTS: [&str; 35] = [
+    "--commit-stick",
+    "--end-ratio",
     "--swap-penalty",
     "--swaps",
     "--clicks",
@@ -123,6 +125,9 @@ fn main() {
     }
     cfg.learn = !args.iter().any(|a| a == "--no-learn");
     cfg.adapt = !args.iter().any(|a| a == "--no-adapt");
+    if let Some(v) = arg(&args, "--commit-stick") {
+        cfg.commit_stick = v.parse().unwrap();
+    }
     if let Some(v) = arg(&args, "--swap-penalty") {
         cfg.swap_penalty = v.parse().unwrap();
     }
@@ -351,6 +356,9 @@ fn session_eval(
     if let Some(v) = opts.5 {
         s.lookahead_min_followers = v;
     }
+    if let Some(v) = std::env::args().collect::<Vec<_>>().windows(2).find(|w| w[0] == "--end-ratio").map(|w| w[1].parse().unwrap()) {
+        s.end_ratio = v;
+    }
     // Áp một Action lên dòng đang gõ như app thật (xoá rồi chèn trước con trỏ, Backspace đi thẳng vào app).
     let press = |s: &mut Session, doc: &mut String, ev: Event| {
         let before = s.wants_before().then(|| doc.clone());
@@ -417,8 +425,9 @@ fn session_eval(
     }
     let st = &s.stats;
     println!(
-        "words {words}  wrong {wrong} ({:.2}%)  unsure words {:.2}%  backspace-flippable {:.2}%  lookahead flips {} ({:.3}%)  replace ops {:.2}/word  unsure keys {:.2}%  wrong at commit {wrong_at_commit} (backspace fixes {bs_fixable}){}",
+        "words {words}  wrong {wrong} ({:.2}%)  end flips {}  unsure words {:.2}%  backspace-flippable {:.2}%  lookahead flips {} ({:.3}%)  replace ops {:.2}/word  unsure keys {:.2}%  wrong at commit {wrong_at_commit} (backspace fixes {bs_fixable}){}",
         100.0 * wrong as f64 / words as f64,
+        st.end_flips,
         100.0 * st.unsure as f64 / st.words.max(1) as f64,
         100.0 * st.backspace_flippable as f64 / st.words.max(1) as f64,
         st.lookahead_flips,

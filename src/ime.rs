@@ -123,6 +123,9 @@ struct Recent {
 
 const HISTORY: usize = 64;
 
+/// Dấu câu chắc chắn kết câu ngay sau từ (dấu chấm còn nối từ: Nest.js).
+const END_MARKS: &str = "?!";
+
 /// Số lần thay liền mà chữ trước con trỏ khác chữ bộ gõ để lại (không rõ app bỏ qua lệnh thay) trước khi chuyển app
 /// sang chặn phím. Một lần khác đơn lẻ thường do macOS tự sửa chữ cùng lúc.
 const DIRECT_MISS_LIMIT: u32 = 3;
@@ -180,6 +183,8 @@ pub struct Stats {
     pub backspace_flippable: usize,
     /// Lần thay chữ đã nằm trong app: người dùng thấy chữ đổi.
     pub rewrites: usize,
+    /// Từ cuối câu đổi sang phương án hợp hết câu hơn (`end_check`).
+    pub end_flips: usize,
 }
 
 pub struct Session<'a> {
@@ -213,6 +218,10 @@ pub struct Session<'a> {
     direct_misses: u32,
     /// Từ đang gõ bắt đầu ở chỗ không đọc được chữ: không kiểm con trỏ, tin vào chữ đã theo dõi như đường xoá lùi.
     untracked: bool,
+    /// Từ sắp chốt đứng cuối câu (Enter, ? !): so thêm khả năng hết câu sau mỗi phương án (`end_check`).
+    ending: bool,
+    /// Phương án kia hết câu hợp hơn ngần này lần thì đổi ("người quay as" + Enter -> "người quay á"). 0 tắt.
+    pub end_ratio: f64,
     /// Ngữ cảnh vừa mất (`commit_all`, `lose_track`): từ sau lấy lại ngữ cảnh từ chữ trước con trỏ nếu đọc được
     /// (`Engine::resume`).
     resync: bool,
@@ -317,6 +326,8 @@ impl<'a> Session<'a> {
             untracked: false,
             resync: true,
             resume_context: true,
+            ending: false,
+            end_ratio: 1.0,
             tail: None,
             keys: String::new(),
             history: VecDeque::new(),
@@ -484,6 +495,7 @@ impl<'a> Session<'a> {
     fn commit_word(&mut self, a: &mut Action) {
         self.forget_retype();
         let v = self.eng.commit();
+        let v = if std::mem::take(&mut self.ending) { self.end_check(v) } else { v };
         self.auto_flip = None;
         let next = canon(&v.text);
         let flip_prev = self.tail.as_ref().and_then(|t| {
@@ -524,6 +536,43 @@ impl<'a> Session<'a> {
         self.stats.backspace_flippable += usize::from(unsure);
         let alt = v.differs().then(|| if v.lang == Lang::Vn { v.en_text.clone() } else { v.vn_text.clone() });
         self.tail = Some(Tail { word: v.text.clone(), seps: String::new(), doubt, unsure, alt });
+    }
+
+    /// Từ vừa chốt đứng cuối câu: nhân mỗi phương án với khả năng hết câu sau nó. Từ Anh như "as", "of" gần như không
+    /// bao giờ đứng cuối câu, còn "á", "nha" thì hay, nên câu tiếng Việt kết bằng "as" ra "á".
+    fn end_check(&mut self, v: View) -> View {
+        if self.end_ratio <= 0.0 || !self.doubtful(&v) {
+            return v;
+        }
+        let Some((alt, p, alt_p, lang)) = doubt_of(&v) else { return v };
+        let (Some(e), Some(alt_e)) = (self.eng.end_rate(&canon(&v.text)), self.eng.end_rate(&canon(&alt))) else {
+            return v;
+        };
+        if alt_p * alt_e <= p * e * self.end_ratio || self.eng.prefer_last().is_none() {
+            return v;
+        }
+        self.stats.end_flips += 1;
+        View { text: alt, lang: other(lang), ..v }
+    }
+
+    /// Enter sau từ vừa gõ và vài dấu cách ("người quay as " + Enter): như `end_check` cho từ đó, đổi cả chữ trong app.
+    fn end_tail(&mut self, a: &mut Action) {
+        let Some(t) = self.tail.as_ref().filter(|t| t.seps.chars().all(|c| c == ' ')) else { return };
+        let Some((alt, p, alt_p, _)) = t.doubt.clone() else { return };
+        let (word, seps) = (t.word.clone(), t.seps.clone());
+        let (Some(e), Some(alt_e)) = (self.eng.end_rate(&canon(&word)), self.eng.end_rate(&canon(&alt))) else { return };
+        if self.end_ratio <= 0.0 || alt_p * alt_e <= p * e * self.end_ratio {
+            return;
+        }
+        if self.eng.last_text() != Some(word.as_str()) || self.eng.prefer_last().is_none() {
+            return;
+        }
+        a.cut(&format!("{word}{seps}"));
+        a.commit += &format!("{alt}{seps}");
+        self.rewrote = true;
+        self.stats.rewrites += 1;
+        self.stats.end_flips += 1;
+        self.swapped(&word, &alt);
     }
 
     /// `before`: chữ ngay trước con trỏ trong app (None nếu app không cho đọc, hoặc đường xoá lùi). Cần ở đầu từ
@@ -581,6 +630,7 @@ impl<'a> Session<'a> {
             Event::Char(c) if self.word_key(c) => self.letter(&mut a, c, before, reopen_ok),
             Event::Char(c) => {
                 if !self.eng.is_empty() {
+                    self.ending = END_MARKS.contains(c);
                     self.commit_word(&mut a);
                 }
                 self.forget_retype();
@@ -846,7 +896,10 @@ impl<'a> Session<'a> {
     /// Phím app cần xử lý: chốt từ đang gõ (sửa nốt chữ trong app) rồi để app xử lý.
     fn finish(&mut self, a: &mut Action) {
         if !self.eng.is_empty() {
+            self.ending = true;
             self.commit_word(a);
+        } else {
+            self.end_tail(a);
         }
         self.commit_all();
         a.pass = true;

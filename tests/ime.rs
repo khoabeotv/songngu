@@ -634,3 +634,35 @@ fn two_swapped_keys_still_give_the_vietnamese_word() {
     assert_eq!(app.run(&mut s, "^").doc, "này ");
     assert!(s.eng.memory().is_empty(), "{}", s.eng.memory().save());
 }
+
+#[test]
+fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
+    // "as" gần như không bao giờ đứng cuối câu, "á" thì hay: Enter (hoặc ? !) ngay sau từ, hay sau dấu cách rồi Enter
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("models/model.bin");
+    let Ok((vn, en, ctx)) = songngu::open_model(&path) else {
+        eprintln!("bỏ qua: không có {}", path.display());
+        return;
+    };
+    let (vn, en, ctx): (&'static _, &'static _, &'static _) = (Box::leak(Box::new(vn)), Box::leak(Box::new(en)), Box::leak(Box::new(ctx)));
+    let typed = |keys: &str, ratio: f64| {
+        let cfg = Config { commit_stick: 1.0, ..Config::default() };
+        let mut s = Session::new(Engine::new(vn, en, cfg).with_context(ctx));
+        s.end_ratio = ratio;
+        let mut app = App::default();
+        app.run(&mut s, keys);
+        app.doc
+    };
+    assert_eq!(typed("nguwowfi quay as|", 0.0), "người quay as", "không còn tái hiện lỗi cũ: sửa lại câu thử");
+    // lúc gõ đã hiện "á": bấm cách thì giữ, không đổi thành "as" vì chênh ít
+    let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
+    let mut app = App::default();
+    assert_eq!(app.run(&mut s, "nguwowfi quay as ").doc, "người quay á ");
+    for (keys, want) in [
+        ("nguwowfi quay as|", "người quay á"),
+        ("nguwowfi quay as?", "người quay á?"),
+        ("nguwowfi quay as |", "người quay á "),
+        ("such as|", "such as"),
+    ] {
+        assert_eq!(typed(keys, 1.0), want, "{keys}");
+    }
+}
