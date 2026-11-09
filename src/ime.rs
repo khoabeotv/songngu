@@ -5,9 +5,11 @@
 //! xoá vài ký tự trước con trỏ rồi chèn). Lớp OS áp bằng một trong hai đường:
 //! - **Thay chữ** (app cho đọc và thay chữ trước con trỏ): dùng API thay chữ của app, không bắn Backspace giả nên
 //!   không tranh với phím thật. App không báo khi con trỏ bị click đi, nên đầu mỗi phím so chữ trước con trỏ với
-//!   chữ bộ gõ đã để lại (`expected`). Khác sau một phím thường = con trỏ đã đi, bắt đầu lại; khác ngay sau một lần
-//!   thay = app không chịu thay chữ: app đó chuyển sang đường xoá lùi (`take_direct_broke`). So ở phím sau chứ không
-//!   ngay sau khi thay vì Chrome/Electron cập nhật chữ đọc được hơi trễ. Ô không cho đọc chữ: từ đó không kiểm
+//!   chữ bộ gõ đã để lại (`expected`). Khác sau một phím thường = con trỏ đã đi, bắt đầu lại. Ngay sau một lần thay
+//!   mà chữ cũ còn nguyên và chữ mới bị chèn thêm ("taá") = app bỏ qua lệnh thay: app đó chuyển sang đường xoá lùi
+//!   (`take_direct_broke`). Khác kiểu khác (macOS tự viết hoa/tự sửa chính tả đúng lúc đó, app cập nhật chậm) chỉ là
+//!   mất dấu, phải `DIRECT_MISS_LIMIT` lần thay liền đều khác mới chuyển. So ở phím sau chứ không ngay sau khi thay
+//!   vì Chrome/Electron cập nhật chữ đọc được hơi trễ. Ô không cho đọc chữ: từ đó không kiểm
 //!   (`untracked`), lớp OS thay theo vị trí con trỏ (Zalo, vài app Flutter).
 //! - **Xoá lùi** (`blind`: terminal, app hỏng thay chữ, app không đưa phím qua bộ gõ): lớp OS xoá `erase` ký tự
 //!   bằng Backspace rồi gõ chữ mới. Không đọc được chữ trong app nên bộ gõ tin vào chữ nó tự theo dõi; click chuột,
@@ -121,6 +123,14 @@ struct Recent {
 
 const HISTORY: usize = 64;
 
+/// Số lần thay liền mà chữ trước con trỏ khác chữ bộ gõ để lại (không rõ app bỏ qua lệnh thay) trước khi chuyển app
+/// sang chặn phím. Một lần khác đơn lẻ thường do macOS tự sửa chữ cùng lúc.
+const DIRECT_MISS_LIMIT: u32 = 3;
+
+/// Lý do chuyển app sang chặn phím (nhật ký gõ).
+pub const REASON_IGNORED: &str = "replace-ignored";
+pub const REASON_MISMATCH: &str = "mismatch";
+
 /// Lần Esc (không Shift) vừa lật, để Esc tiếp ngay sau đó trả lại.
 struct EscUndo {
     at: Instant,
@@ -195,8 +205,12 @@ pub struct Session<'a> {
     expected: Option<String>,
     /// Phím vừa rồi đã thay chữ nằm trong app.
     rewrote: bool,
-    /// App vừa bị phát hiện không thay chữ được (lớp ngoài ghi nhớ cho app, xem `take_direct_broke`).
-    direct_broke: bool,
+    /// App vừa bị phát hiện không thay chữ được, kèm lý do (lớp ngoài ghi nhớ cho app, xem `take_direct_broke`).
+    direct_broke: Option<&'static str>,
+    /// Chữ trước con trỏ sẽ kết thúc thế này nếu app bỏ qua lần thay vừa rồi (chèn chữ mới mà không xoá chữ cũ).
+    ignored: Option<String>,
+    /// Số lần thay liền khác chữ mà không rõ lý do (`DIRECT_MISS_LIMIT`).
+    direct_misses: u32,
     /// Từ đang gõ bắt đầu ở chỗ không đọc được chữ: không kiểm con trỏ, tin vào chữ đã theo dõi như đường xoá lùi.
     untracked: bool,
     /// Ngữ cảnh vừa mất (`commit_all`, `lose_track`): từ sau lấy lại ngữ cảnh từ chữ trước con trỏ nếu đọc được
@@ -228,6 +242,12 @@ pub struct Session<'a> {
     del_from: Option<Retype>,
     deleting: Option<Deleting>,
     retype_forced: bool,
+}
+
+/// `n` ký tự cuối của `s`.
+fn tail_chars(s: &str, n: usize) -> String {
+    let skip = s.chars().count().saturating_sub(n);
+    s.chars().skip(skip).collect()
 }
 
 fn utf16(s: &str) -> usize {
@@ -291,7 +311,9 @@ impl<'a> Session<'a> {
             shown: String::new(),
             expected: None,
             rewrote: false,
-            direct_broke: false,
+            direct_broke: None,
+            ignored: None,
+            direct_misses: 0,
             untracked: false,
             resync: true,
             resume_context: true,
@@ -353,9 +375,15 @@ impl<'a> Session<'a> {
         self.blind || self.untracked
     }
 
-    /// App vừa bị phát hiện không thay chữ được (mỗi lần chỉ báo một lần).
-    pub fn take_direct_broke(&mut self) -> bool {
-        std::mem::take(&mut self.direct_broke)
+    /// App vừa bị phát hiện không thay chữ được (mỗi lần chỉ báo một lần), kèm lý do.
+    pub fn take_direct_broke(&mut self) -> Option<&'static str> {
+        self.direct_broke.take()
+    }
+
+    /// Đổi app: đếm lại số lần thay khác chữ.
+    pub fn reset_direct_checks(&mut self) {
+        self.direct_misses = 0;
+        self.ignored = None;
     }
 
     /// Chữ bộ gõ đã để lại ngay trước con trỏ, nếu còn cần kiểm (để thay từ đang gõ hoặc từ trước).
@@ -512,14 +540,28 @@ impl<'a> Session<'a> {
         }
         // Mất dấu thì phím này bắt đầu từ mới, không mở lại từ trước con trỏ (chữ đọc được có thể chưa cập nhật).
         let mut reopen_ok = true;
+        let ignored = self.ignored.take();
         if let Some(exp) = self.expected.take() {
             if !before.is_some_and(|b| b.ends_with(&exp)) {
-                if self.rewrote {
-                    self.direct_failed();
-                } else {
+                let lower = |s: &str| s.to_lowercase();
+                if !self.rewrote {
                     self.lose_track();
+                } else if ignored.is_some_and(|i| before.is_some_and(|b| b.ends_with(&i))) {
+                    self.direct_failed(REASON_IGNORED);
+                } else if before.is_some_and(|b| lower(b).ends_with(&lower(&exp))) {
+                    // chỉ khác chữ hoa (macOS tự viết hoa đầu câu): app vẫn thay chữ đúng
+                    self.lose_track();
+                } else {
+                    self.direct_misses += 1;
+                    if self.direct_misses >= DIRECT_MISS_LIMIT {
+                        self.direct_failed(REASON_MISMATCH);
+                    } else {
+                        self.lose_track();
+                    }
                 }
                 reopen_ok = false;
+            } else if self.rewrote {
+                self.direct_misses = 0;
             }
         }
         self.rewrote = false;
@@ -569,6 +611,11 @@ impl<'a> Session<'a> {
             Event::Other => self.finish(&mut a),
         }
         self.expected = self.track();
+        // Thay chữ mà app bỏ qua vùng thay thì chữ mới bị chèn thêm sau chữ cũ. Chỉ xoá (không chèn) thì không phân
+        // biệt được với app cập nhật chậm, bỏ qua.
+        self.ignored = (self.rewrote && !a.pass && !a.commit.is_empty() && self.expected.is_some())
+            .then(|| before.map(|b| tail_chars(&format!("{b}{}", a.commit), 40)))
+            .flatten();
         a
     }
 
@@ -806,9 +853,10 @@ impl<'a> Session<'a> {
     }
 
     /// App bỏ qua lệnh thay chữ: từ nay dùng đường xoá lùi.
-    fn direct_failed(&mut self) {
+    fn direct_failed(&mut self, reason: &'static str) {
         self.blind = true;
-        self.direct_broke = true;
+        self.direct_broke = Some(reason);
+        self.direct_misses = 0;
         self.lose_track();
     }
 

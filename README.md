@@ -75,7 +75,7 @@ platform/macos/build.sh --install
 
 Sửa trong cửa sổ có hiệu lực ngay ở phím gõ tiếp theo.
 
-File người dùng nằm trong `~/Library/Application Support/Songngu/`: `memory.tsv` (lựa chọn đã học), `settings.tsv` (cài đặt, app bỏ qua/chặn phím), `typing-log.tsv` (nhật ký, nếu bật; ghi cả bundle id app mỗi khi đổi app, để báo lỗi).
+File người dùng nằm trong `~/Library/Application Support/Songngu/`: `memory.tsv` (lựa chọn đã học), `settings.tsv` (cài đặt, app bỏ qua/chặn phím), `typing-log.tsv` (nhật ký, nếu bật; ghi cả bundle id app mỗi khi đổi app và lý do mỗi lần bộ gõ tự chuyển một app sang chặn phím, để báo lỗi).
 
 ## Khắc phục sự cố
 

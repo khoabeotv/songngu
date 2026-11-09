@@ -117,12 +117,20 @@ impl Handle {
         self.memory_stamp = write_file(&self.memory_path, &self.session.eng.memory().save());
     }
 
+    /// Ghi app vào danh sách chặn phím (tự phát hiện), kèm lý do vào nhật ký gõ để biết vì sao.
+    fn auto_tap(&mut self, bundle: &str, reason: &str) {
+        self.refresh(true);
+        self.settings.set_tap_auto(bundle);
+        self.save_settings();
+        if self.session.logging {
+            self.session.log.push(format!("autotap\t{bundle}\t{reason}"));
+        }
+    }
+
     fn after_event(&mut self) {
-        if self.session.take_direct_broke() && !self.app.is_empty() {
+        if let Some(reason) = self.session.take_direct_broke().filter(|_| !self.app.is_empty()) {
             // app không thay chữ được: từ nay chặn phím và xoá bằng Backspace ở app này
-            self.refresh(true);
-            self.settings.set_tap_auto(&self.app.clone());
-            self.save_settings();
+            self.auto_tap(&self.app.clone(), reason);
         }
         if self.session.memory_dirty {
             self.session.memory_dirty = false;
@@ -208,6 +216,7 @@ pub unsafe extern "C" fn sn_create(
 pub unsafe extern "C" fn sn_set_app(h: *mut Handle, bundle: *const c_char) {
     let h = &mut *h;
     h.app = string(bundle).unwrap_or_default();
+    h.session.reset_direct_checks();
     h.refresh(true);
     if !h.broken {
         h.apply_settings();
@@ -319,9 +328,8 @@ pub unsafe extern "C" fn sn_set_tap_app(h: *mut Handle, bundle: *const c_char, o
 pub unsafe extern "C" fn sn_set_tap_auto(h: *mut Handle, bundle: *const c_char) {
     let h = &mut *h;
     let Some(b) = string(bundle).filter(|b| !b.is_empty()) else { return };
-    h.refresh(true);
-    h.settings.set_tap_auto(&b);
-    h.save_settings();
+    // lớp OS gọi khi app nhiều lần không báo vị trí con trỏ lúc thay chữ
+    h.auto_tap(&b, "no-cursor");
     if !h.broken {
         h.apply_settings();
     }

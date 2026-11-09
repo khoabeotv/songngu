@@ -521,7 +521,7 @@ fn app_that_ignores_replacement_switches_to_backspace() {
     app.run(&mut s, "tas");
     app.run(&mut s, "k");
     assert!(s.blind);
-    assert!(s.take_direct_broke());
+    assert_eq!(s.take_direct_broke(), Some(songngu::ime::REASON_IGNORED));
     app.run(&mut s, " truowfng duodwcj ");
     assert!(app.doc.ends_with(" trường được "), "{}", app.doc);
 }
@@ -536,7 +536,38 @@ fn app_that_hides_its_text_still_gets_rewrites_by_position() {
     app.run(&mut s, "k ddi duodwcj ");
     assert_eq!(app.doc, "trường task đi được ");
     assert!(!s.blind);
-    assert!(!s.take_direct_broke());
+    assert!(s.take_direct_broke().is_none());
+}
+
+#[test]
+fn text_changed_by_the_system_right_after_a_rewrite_is_not_a_broken_app() {
+    // macOS tự viết hoa đầu câu / tự sửa chính tả đúng lúc bộ gõ vừa thay chữ: chữ trước con trỏ khác chữ bộ gõ để
+    // lại, nhưng app vẫn thay chữ đúng. Chỉ khác chữ hoa thì không tính; khác hẳn thì phải 3 lần thay liền mới chuyển.
+    let mut s = session();
+    let mut app = App::default();
+    for _ in 0..5 {
+        app.run(&mut s, "tas");
+        app.doc = app.doc.replace("tá", "Tá");
+        app.run(&mut s, " ");
+    }
+    assert!(s.take_direct_broke().is_none() && !s.blind);
+    for i in 1..=3 {
+        app.run(&mut s, "tas");
+        app.doc = app.doc.replace("tá", "to");
+        app.run(&mut s, " ");
+        let broke = s.take_direct_broke();
+        assert_eq!(broke.is_some(), i == 3, "lần {i}: {broke:?}");
+    }
+    assert_eq!(s.take_direct_broke(), None);
+    // một lần thay đúng xen giữa thì đếm lại từ đầu
+    let mut s = session();
+    let mut app = App::default();
+    for _ in 0..4 {
+        app.run(&mut s, "tas");
+        app.doc = app.doc.replace("tá", "to");
+        app.run(&mut s, " tas ");
+    }
+    assert!(s.take_direct_broke().is_none() && !s.blind, "{}", app.doc);
 }
 
 #[test]

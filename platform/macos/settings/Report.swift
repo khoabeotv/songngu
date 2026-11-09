@@ -9,14 +9,25 @@ enum Report {
     static let maxURL = 7000
 
     /// Một dòng typing-log.tsv dễ đọc: "tieengs → tiếng", từ tiếng Anh thêm "[En]", lần lật "↺ lật: a → b",
-    /// đổi app "— Tên app —". nil với dòng không hiểu.
+    /// đổi app "— Tên app —", app bị tự chuyển sang chặn phím "⚠ …". nil với dòng không hiểu.
     static func pretty(_ line: Substring) -> String? {
         let f = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
         switch (f.first, f.count) {
         case ("app", 2): return "— \(AppEntry.of(f[1]).name) (\(f[1])) —"
         case ("flip", 3): return "   ↺ lật: \(f[1]) → \(f[2])"
+        case ("autotap", 3): return "   ⚠ tự chuyển \(AppEntry.of(f[1]).name) sang chặn phím: \(reason(f[2]))"
         case (_, 3): return "\(f[0]) → \(f[1])" + (f[2] == "En" ? "  [En]" : "")
         default: return nil
+        }
+    }
+
+    /// Lý do bộ gõ tự chuyển app sang chặn phím (src/ime.rs, src/ffi.rs).
+    static func reason(_ r: String) -> String {
+        switch r {
+        case "replace-ignored": return "app bỏ qua lệnh thay chữ (chữ lặp kiểu \"taá\")"
+        case "mismatch": return "3 lần thay liền, chữ trong app khác chữ bộ gõ để lại"
+        case "no-cursor": return "app không báo vị trí con trỏ 3 lần thay liền"
+        default: return r
         }
     }
 
