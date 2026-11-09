@@ -54,6 +54,7 @@ pub struct Config {
     pub word_switch: f64,
     pub telex: TelexOpts,
     /// Nhân xác suất tiếng Anh (Terminal, IDE: > 1).
+    /// Nhân xác suất tiếng Anh (chỉ để đo; bộ gõ dùng 1 ở mọi app, kể cả terminal: xem `docs/evaluation.md`).
     pub en_bias: f64,
     /// Phạt mỗi thao tác người gõ Telex hiếm làm (xem `order_penalty`).
     pub odd_penalty: f64,

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::engine::{Config, Engine};
 use crate::lexicon::VnLex;
-use crate::ime::{AppKind, Event, Session};
+use crate::ime::{Event, Session};
 use crate::memory::Memory;
 use crate::settings::Settings;
 use crate::telex::TelexOpts;
@@ -82,8 +82,6 @@ impl Handle {
         self.session.app = s.app_kind(&self.app);
         self.session.blind = s.tap(&self.app);
         self.session.backspace_flip = !s.option("esc_flip");
-        // Terminal/IDE: chủ yếu gõ lệnh, tên biến tiếng Anh.
-        cfg.en_bias = if self.session.app == AppKind::Code { 5.0 } else { 1.0 };
     }
 
     /// Nạp lại file bị tiến trình khác sửa. `force`: bỏ qua giới hạn mỗi `RECHECK`.

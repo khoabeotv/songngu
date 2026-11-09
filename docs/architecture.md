@@ -52,7 +52,7 @@ Hành vi chung:
 - Mỗi lần lật được nhớ vào `memory.tsv` (`memory.rs`).
 - Backspace trong từ xoá chữ đang hiện, giữ dấu ("tiếng" -> "tiến"); chỉ mất chữ cuối thì để chính phím Backspace đi vào app. Gõ ngay sau một từ đã có thì mở lại từ đó ("tiêng" + s -> "tiếng"). Không đọc được chữ (chặn phím, ô không cho đọc) thì chỉ mở lại từ vừa gõ khi đã xoá hết dấu ngăn cách sau nó (gõ "tieeng ", Backspace, s -> "tiếng").
 - Enter, Tab, mũi tên, phím tắt, click chuột: kết thúc từ (sửa nốt chữ nếu cần) rồi để app xử lý. Ngữ cảnh mất theo: phím đầu của từ sau đọc chữ trước con trỏ (app cho đọc), lấy từ cuối làm từ trước và tính tiếng của tối đa 8 từ cuối vào tỉ lệ Anh/Việt gần đây (`Engine::resume`). Hết câu trước con trỏ thì vẫn là đầu câu; từ dính sát con trỏ thì mở lại từ đó như trên.
-- Terminal/IDE (danh sách trong `src/settings.rs`) nghiêng tiếng Anh ×5, Esc là của app.
+- Terminal/IDE (danh sách trong `src/settings.rs`): Esc là của app. Đoán Anh/Việt như app thường: người ta cũng viết câu tiếng Việt trong terminal (commit message, nói chuyện với AI agent), còn lệnh thì ngữ cảnh tự nhận.
 - Engine lỗi (panic) thì bộ gõ tự tắt, phím đi thẳng vào app.
 
 ## macOS

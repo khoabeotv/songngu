@@ -1,6 +1,6 @@
 //! Cài đặt bộ gõ (file TSV trong thư mục người dùng): app bỏ qua, app kiểu code, tuỳ chọn gõ.
 //!   exclude<TAB>bundle id      app bộ gõ đứng ngoài
-//!   code<TAB>bundle id         thêm app kiểu Terminal/IDE (Esc của app, nghiêng tiếng Anh)
+//!   code<TAB>bundle id         thêm app kiểu Terminal/IDE (Esc của app)
 //!   tap<TAB>bundle id[<TAB>auto]  app không thay chữ được hoặc không đưa phím qua bộ gõ: chặn phím và xoá bằng Backspace.
 //!                              `auto`: bộ gõ tự ghi khi kiểm tra thất bại (cửa sổ cài đặt tách riêng để gỡ nếu nhầm);
 //!                              không có: người dùng chọn. Dòng `marked` của bản cũ đọc như `tap`.
