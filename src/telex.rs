@@ -109,6 +109,12 @@ impl Composer {
             self.literal[li] = None;
             return;
         }
+        if is_vowel(c) && self.swapped_wu() {
+            // "wu" gõ đảo của "uw" (chwua -> chưa, ngwuowif -> người): vần "ưu" không có nguyên âm nào theo sau, nên
+            // gặp nguyên âm mới thì chữ u gõ ngay sau w đứng riêng là gõ đảo. "hwu", "cwus" (hưu, cứu) vẫn giữ.
+            self.letters.pop();
+            self.odd += 1;
+        }
         let handled = match c {
             'w' => self.apply_w(li, upper),
             'a' | 'e' | 'o' => self.apply_hat(c, li),
@@ -229,6 +235,21 @@ impl Composer {
             i += 1;
         }
         (vs, i)
+    }
+
+    /// Vần đang là "ưu" với ư do w đứng riêng và u gõ ngay sau phím w đó.
+    fn swapped_wu(&self) -> bool {
+        let n = self.letters.len();
+        if n < 2 || self.vowel_span() != (n - 2, n) {
+            return false;
+        }
+        let (w, u) = (self.letters[n - 2], self.letters[n - 1]);
+        let Some(k) = w.mark_key else { return false };
+        w.ch == 'ư'
+            && u.ch == 'u'
+            && u.mark_key.is_none()
+            && matches!(self.literal.get(k), Some(Some(('w', _))))
+            && matches!(self.literal.get(k + 1), Some(Some(('u', _))))
     }
 
     fn apply_w(&mut self, li: usize, upper: bool) -> bool {
@@ -422,6 +443,13 @@ mod tests {
             ("dduowcj", "được"),
             ("nhw", "như"),
             ("muaw", "mưa"),
+            // w gõ trước u (đảo của uw): còn nguyên âm sau thì bỏ u thừa; "ưu" đứng cuối vẫn là vần ưu
+            ("chwua", "chưa"),
+            ("chwusa", "chứa"),
+            ("ngwuowif", "người"),
+            ("ddwuowcj", "được"),
+            ("hwu", "hưu"),
+            ("cwus", "cứu"),
             ("hoawcj", "hoặc"),
             ("quaws", "quắ"),
             ("giuwx", "giữ"),

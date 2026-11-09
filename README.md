@@ -35,7 +35,7 @@ platform/macos/build.sh --install
 
 ## Sử dụng
 
-**Gõ**: Telex, dấu đặt ở đâu trong âm tiết cũng được: `tieesng`, `tieengs`, `tienges` đều ra "tiếng"; `truowngf`, `truongwf`; `thaays`, `thayas`; `dduwowcj`, `duodwcj`. Từ tiếng Anh gõ như bình thường. Gõ lặp phím dấu để huỷ dấu đó và giữ chữ cái.
+**Gõ**: Telex, dấu đặt ở đâu trong âm tiết cũng được: `tieesng`, `tieengs`, `tienges` đều ra "tiếng"; `truowngf`, `truongwf`; `thaays`, `thayas`; `dduwowcj`, `duodwcj`; w gõ lỡ trước u cũng được (`chwua` ra "chưa"). Từ tiếng Anh gõ như bình thường. Gõ lặp phím dấu để huỷ dấu đó và giữ chữ cái.
 
 **Lật Anh/Việt** khi bộ gõ đoán sai:
 
