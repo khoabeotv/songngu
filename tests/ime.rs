@@ -653,7 +653,7 @@ fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
         app.doc
     };
     assert_eq!(typed("nguwowfi quay as|", 0.0), "người quay as", "không còn tái hiện lỗi cũ: sửa lại câu thử");
-    // lúc gõ đã hiện "á": bấm cách thì giữ, không đổi thành "as" vì chênh ít
+    // lúc gõ đã hiện "á": bấm cách thì giữ, không đổi thành "as" vì chênh ít; trừ ở đầu câu
     let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
     let mut app = App::default();
     assert_eq!(app.run(&mut s, "nguwowfi quay as ").doc, "người quay á ");
@@ -663,6 +663,13 @@ fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
         ("nguwowfi quay as |", "người quay á "),
         ("such as|", "such as"),
     ] {
+    // đầu dòng trong một ô toàn tiếng Anh (SQL): "as" là tiếng Anh, kể cả khi bộ gõ đọc lại ô sau khi click vào
+    let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
+    let mut app = App { doc: "select count(*)\nfrom orders o\n".into(), ..Default::default() };
+    assert_eq!(app.run(&mut s, "as ").doc, "select count(*)\nfrom orders o\nas ");
+    let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
+    let mut app = App::default();
+    assert_eq!(app.run(&mut s, "as ").doc, "as ");
         assert_eq!(typed(keys, 1.0), want, "{keys}");
     }
 }

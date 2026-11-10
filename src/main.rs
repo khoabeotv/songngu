@@ -15,7 +15,8 @@ use songngu::engine::{Config, Engine, Lang, View};
 use songngu::syllable::split_tone;
 use songngu::typing::{scored_words, Habits, Typist, Unit, BS, SKIP};
 
-const VALUE_OPTS: [&str; 36] = [
+const VALUE_OPTS: [&str; 37] = [
+    "--bigram-context",
     "--en-bias",
     "--commit-stick",
     "--end-ratio",
@@ -126,6 +127,9 @@ fn main() {
     }
     cfg.learn = !args.iter().any(|a| a == "--no-learn");
     cfg.adapt = !args.iter().any(|a| a == "--no-adapt");
+    if let Some(v) = arg(&args, "--bigram-context") {
+        cfg.bigram_context = v.parse().unwrap();
+    }
     if let Some(v) = arg(&args, "--en-bias") {
         cfg.en_bias = v.parse().unwrap();
     }

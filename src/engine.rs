@@ -67,6 +67,9 @@ pub struct Config {
     pub informative_ratio: f64,
     /// Học thói quen gõ mũ/đ muộn của từng người (`Memory::late_rate`) thay vì chỉ dùng mức phạt chung.
     pub adapt: bool,
+    /// Mức đổi tỉ lệ Anh/Việt trong cặp từ corpus sang tỉ lệ theo ngữ cảnh (`contextual`; 0 tắt, 1 đổi hẳn). Dev:
+    /// 0/0,5/1 cho 311/308/310 từ sai, click đi rồi quay lại mỗi 4 từ 336/333/333.
+    pub bigram_context: f64,
     /// Lúc chốt từ, hai phương án chênh dưới ngần này lần thì giữ phương án đang hiện (1 tắt). Dev: 1/1,5/2/2,5/3/4/10
     /// cho 317/316/307/307/309/317/328 từ sai.
     pub commit_stick: f64,
@@ -98,6 +101,7 @@ impl Default for Config {
             adapt: true,
             swap_penalty: 1e-5,
             commit_stick: 2.0,
+            bigram_context: 0.5,
         }
     }
 }
@@ -430,9 +434,21 @@ impl<'a> Engine<'a> {
             total += PERSONAL * f.total();
             types += f.types();
         }
+        // Cặp từ đếm từ corpus mang sẵn tỉ lệ Anh/Việt sau từ trước của corpus (phần lớn là văn bản Việt): đầu câu
+        // là "Á", "Ừ" nhiều hơn "As", "So". Đổi tỉ lệ đó sang tỉ lệ theo ngữ cảnh đang gõ (`prior`, gồm tiếng các từ
+        // gần đây), để đầu câu trong một ô toàn tiếng Anh nghiêng tiếng Anh.
+        let reweight = match (self.cfg.bigram_context > 0.0, self.ctx, self.prev_id) {
+            (true, Some(c), Some(id)) => {
+                let n = c.next_lang(id);
+                let l = if lang == Lang::Vn { 0 } else { 1 };
+                let corpus = (n[l] + 1.0) / (n[0] + n[1] + 2.0);
+                (self.prior(lang) / corpus).powf(self.cfg.bigram_context)
+            }
+            _ => 1.0,
+        };
         let p = if total > 0.0 {
             let l = total / (total + types);
-            l * mass / total + (1.0 - l) * base
+            l * reweight * mass / total + (1.0 - l) * base
         } else {
             base
         };
@@ -742,9 +758,14 @@ impl<'a> Engine<'a> {
         };
         // Chênh ít thì giữ chữ đang hiện: người gõ đã thấy "á" lúc gõ thì đổi thành "as" lúc bấm cách trông như lỗi
         // (cả từ còn tiền tố chung, cả từ chốt đều chỉ là ước lượng).
+        // Đầu câu thì không: tiền tố "á" ở đầu câu rất đậm (Á, Ác, Ánh…) nên "as", "As far as" luôn hiện "á" lúc gõ.
         let stick = self.cfg.commit_stick;
         let lang = match (self.shown, vn_p, en_p) {
-            (Some(sh), Some(v), Some(e)) if sh != lang && vn_text != en_text && (v.ln() - e.ln()).abs() < stick.ln() => sh,
+            (Some(sh), Some(v), Some(e))
+                if sh != lang && vn_text != en_text && self.prev != START && (v.ln() - e.ln()).abs() < stick.ln() =>
+            {
+                sh
+            }
             _ => lang,
         };
         // Chỉ từ nói rõ thứ tiếng mới đổi "tiếng của từ trước".
