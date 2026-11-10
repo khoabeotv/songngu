@@ -58,6 +58,9 @@ struct App {
     ignores_replace: bool,
     /// Số lần phải xoá chữ trong app.
     erases: usize,
+    /// Chữ đọc được chỉ làm mới khi số ký tự đổi (VS Code: thay "i" bằng "í" thì vẫn đọc ra "i").
+    lags: bool,
+    seen: Option<String>,
 }
 
 impl App {
@@ -71,7 +74,10 @@ impl App {
                 '|' => Event::Other,
                 c => Event::Char(c),
             };
-            let before = (!self.opaque && !s.blind).then(|| self.doc.clone());
+            if !self.lags || self.seen.as_ref().is_none_or(|v| v.chars().count() != self.doc.chars().count()) {
+                self.seen = Some(self.doc.clone());
+            }
+            let before = (!self.opaque && !s.blind).then(|| self.seen.clone().unwrap());
             let a = s.handle(ev, before.as_deref());
             if a.erase > 0 {
                 self.erases += 1;
@@ -657,12 +663,6 @@ fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
     let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
     let mut app = App::default();
     assert_eq!(app.run(&mut s, "nguwowfi quay as ").doc, "người quay á ");
-    for (keys, want) in [
-        ("nguwowfi quay as|", "người quay á"),
-        ("nguwowfi quay as?", "người quay á?"),
-        ("nguwowfi quay as |", "người quay á "),
-        ("such as|", "such as"),
-    ] {
     // đầu dòng trong một ô toàn tiếng Anh (SQL): "as" là tiếng Anh, kể cả khi bộ gõ đọc lại ô sau khi click vào
     let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
     let mut app = App { doc: "select count(*)\nfrom orders o\n".into(), ..Default::default() };
@@ -670,6 +670,12 @@ fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
     let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
     let mut app = App::default();
     assert_eq!(app.run(&mut s, "as ").doc, "as ");
+    for (keys, want) in [
+        ("nguwowfi quay as|", "người quay á"),
+        ("nguwowfi quay as?", "người quay á?"),
+        ("nguwowfi quay as |", "người quay á "),
+        ("such as|", "such as"),
+    ] {
         assert_eq!(typed(keys, 1.0), want, "{keys}");
     }
 }
@@ -689,4 +695,19 @@ fn a_non_syllable_form_flipped_to_once_comes_back_by_itself() {
     app.run(&mut s, "uwfk ddzai uwfk ");
     assert_eq!(app.doc, "ừk đzai ừk ");
     assert_eq!(songngu::context::key_to_word(&songngu::context::canon("ừk")), "ừk");
+}
+
+#[test]
+fn an_app_that_refreshes_its_text_late_keeps_the_word_and_the_flip() {
+    // VS Code: thay "i" bằng "í" (cùng số ký tự) thì chữ đọc được chưa đổi tới khi con trỏ dời. Bộ gõ không được
+    // tưởng con trỏ đã đi: "visa" không thành "vía", Shift+Esc vẫn lật từ đang gõ, app không bị chuyển sang chặn phím.
+    let mut s = session();
+    let mut app = App { lags: true, ..Default::default() };
+    app.run(&mut s, "visa tas^");
+    assert_eq!(app.doc, "visa tas");
+    for _ in 0..5 {
+        app.run(&mut s, " tieengs vieejt");
+    }
+    assert!(app.doc.ends_with(" tiếng việt"), "{}", app.doc);
+    assert!(s.take_direct_broke().is_none() && !s.blind);
 }

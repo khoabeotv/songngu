@@ -227,6 +227,9 @@ pub struct Session<'a> {
     resync: bool,
     /// Tắt `resync` (để đo).
     pub resume_context: bool,
+    /// Chữ đọc được ở phím trước, và phím trước có sửa chữ trong app không (phát hiện app chậm làm mới, `handle`).
+    last_read: Option<String>,
+    last_changed: bool,
     tail: Option<Tail>,
     keys: String,
     history: VecDeque<Recent>,
@@ -326,6 +329,8 @@ impl<'a> Session<'a> {
             untracked: false,
             resync: true,
             resume_context: true,
+            last_read: None,
+            last_changed: false,
             ending: false,
             end_ratio: 1.0,
             tail: None,
@@ -578,6 +583,21 @@ impl<'a> Session<'a> {
     /// `before`: chữ ngay trước con trỏ trong app (None nếu app không cho đọc, hoặc đường xoá lùi). Cần ở đầu từ
     /// (`wants_before`) và khi Esc.
     pub fn handle(&mut self, ev: Event, before: Option<&str>) -> Action {
+        // Chữ đọc được y hệt lần trước dù phím trước đã sửa chữ: app chưa làm mới phần đọc được (VS Code và app
+        // Chromium khác chỉ làm mới khi con trỏ dời, nên thay "i" bằng "í" không đổi gì). Coi như không đọc được chữ,
+        // tin vào chữ bộ gõ tự theo dõi, thay vì tưởng con trỏ đã bị click đi.
+        let stale = before.is_some() && self.last_changed && before == self.last_read.as_deref();
+        if stale {
+            self.expected = None;
+            self.untracked = true;
+        }
+        let a = self.handle_inner(ev, if stale { None } else { before });
+        self.last_read = before.map(str::to_string);
+        self.last_changed = !a.commit.is_empty() || a.erase > 0 || (a.pass && ev == Event::Backspace);
+        a
+    }
+
+    fn handle_inner(&mut self, ev: Event, before: Option<&str>) -> Action {
         let mut a = Action::default();
         // chỉ Esc ngay sau (không phím nào xen giữa) mới trả lại được
         let esc_undo = self.esc_undo.take();
