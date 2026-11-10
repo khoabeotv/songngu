@@ -67,6 +67,11 @@ impl Memory {
         self.follow.get(prev)
     }
 
+    /// Số lần người dùng chọn từ `key` khi lật.
+    pub fn chosen(&self, key: &str) -> f64 {
+        self.chosen.get(key).copied().unwrap_or(0.0)
+    }
+
     /// Hệ số ưu tiên cho từ ở mọi ngữ cảnh: (1 + số lần được chọn) / (1 + số lần bị bỏ).
     pub fn preference(&self, key: &str) -> f64 {
         (1.0 + self.chosen.get(key).copied().unwrap_or(0.0)) / (1.0 + self.rejected.get(key).copied().unwrap_or(0.0))

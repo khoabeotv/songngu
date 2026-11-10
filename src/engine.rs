@@ -266,6 +266,15 @@ impl<'a> Engine<'a> {
             // âm tiết hiếm (đờ, giúm, xuê) có thật nhưng ngoài phụ đề và corpus: vẫn còn là phương án, để ngữ cảnh quyết.
             // Chỉ khi có ngữ cảnh: không có thì từ Anh lạ cũng không có xác suất, ROAS sẽ thành ROÁ.
             .or_else(|| self.ctx.and(self.vn.unseen_prob(&s, t, self.cfg.unseen_vn)))
+            .or_else(|| self.personal_vn())
+    }
+
+    /// Dạng không phải âm tiết Việt mà người dùng đã lật sang (ừk, đzai, ák): ai đã viết kiểu đó thì hay viết lại,
+    /// nên coi như một từ đã gặp `PERSONAL` lần mỗi lần lật. Chỉ khớp cả từ đang gõ (đang gõ dở "đz" thì chưa).
+    fn personal_vn(&self) -> Option<f64> {
+        let n = self.memory.chosen(&canon(&self.vn_text()));
+        let total = self.ctx.map_or(self.vn.total(), |c| c.vn.total());
+        (n > 0.0 && !self.comp.undone).then(|| PERSONAL * n / total)
     }
 
     /// Từ Việt đang gõ có trong từ điển (`vn_word` không tính phần âm tiết chưa gặp).
@@ -616,6 +625,7 @@ impl<'a> Engine<'a> {
                     })
                 })
         });
+        let vn_p = vn_p.or_else(|| self.personal_vn().map(|u| penalty * self.contextual(Lang::Vn, u, |f| f.count(&canon(&vn_text)))));
         let (en_text, en_low, en_u) = self.en_side(|w| self.en_prefix(w), false);
         // Khoá ASCII chỉ có số thanh ở cuối, nên khoá ASCII trong khoảng tiền tố không dấu luôn bắt đầu bằng `en_low`.
         let en_p = en_u.map(|u| self.contextual(Lang::En, u, |f| f.prefix_class_sum(&en_low, crate::context::ASCII)));

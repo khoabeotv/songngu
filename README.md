@@ -35,7 +35,7 @@ platform/macos/build.sh --install
 
 ## Sử dụng
 
-**Gõ**: Telex, dấu đặt ở đâu trong âm tiết cũng được: `tieesng`, `tieengs`, `tienges` đều ra "tiếng"; `truowngf`, `truongwf`; `thaays`, `thayas`; `dduwowcj`, `duodwcj`; w gõ lỡ trước u cũng được (`chwua` ra "chưa"); hai phím gõ đảo làm từ không thành tiếng Việt thì bộ gõ thử đảo lại khi chốt từ (`nyaf` ra "này", `ddwang` ra "đăng"). Từ tiếng Anh gõ như bình thường. Gõ lặp phím dấu để huỷ dấu đó và giữ chữ cái.
+**Gõ**: Telex, dấu đặt ở đâu trong âm tiết cũng được: `tieesng`, `tieengs`, `tienges` đều ra "tiếng"; `truowngf`, `truongwf`; `thaays`, `thayas`; `dduwowcj`, `duodwcj`; w gõ lỡ trước u cũng được (`chwua` ra "chưa"); hai phím gõ đảo làm từ không thành tiếng Việt thì bộ gõ thử đảo lại khi chốt từ (`nyaf` ra "này", `ddwang` ra "đăng"). Từ tiếng Anh gõ như bình thường. Gõ lặp phím dấu để huỷ dấu đó và giữ chữ cái. Kiểu viết chat không phải âm tiết tiếng Việt (`uwfk` → "ừk", `ddzai` → "đzai") thì gõ rồi bấm Ctrl+Esc; lật một lần là lần sau tự ra.
 
 **Lật Anh/Việt** khi bộ gõ đoán sai:
 

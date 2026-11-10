@@ -666,3 +666,20 @@ fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
         assert_eq!(typed(keys, 1.0), want, "{keys}");
     }
 }
+
+#[test]
+fn a_non_syllable_form_flipped_to_once_comes_back_by_itself() {
+    // "ừk", "đzai" không phải âm tiết Việt: chỉ ra được bằng Ctrl/Shift+Esc. Đã lật một lần thì lần sau tự ra, và
+    // trang Đã học hiện đúng chữ.
+    let mut s = session();
+    let mut app = App::default();
+    app.run(&mut s, "uwfk ddzai ");
+    assert_eq!(app.doc, "uwfk ddzai ");
+    let mut app = App::default();
+    app.run(&mut s, "uwfk^ ddzai^ ");
+    assert_eq!(app.doc, "ừk đzai ");
+    let mut app = App::default();
+    app.run(&mut s, "uwfk ddzai uwfk ");
+    assert_eq!(app.doc, "ừk đzai ừk ");
+    assert_eq!(songngu::context::key_to_word(&songngu::context::canon("ừk")), "ừk");
+}
