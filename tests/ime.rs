@@ -670,6 +670,17 @@ fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
     let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
     let mut app = App::default();
     assert_eq!(app.run(&mut s, "as ").doc, "as ");
+    // vừa chat tiếng Việt ở app khác rồi click vào trình soạn SQL: tiếng gần đây lấy theo chữ trong ô, nên ngay lúc
+    // gõ đã hiện "as", Enter cũng giữ "as"
+    let sql = "ORDER BY\n    login_date DESC; ";
+    for keys in ["as", "as|"] {
+        let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx));
+        let mut chat = App::default();
+        chat.run(&mut s, "hoom nay minhf ddi awn trwa owr ddaau nhir, chieuf nay hopj luc ba giowf nhes|");
+        let mut app = App { doc: sql.into(), ..Default::default() };
+        app.run(&mut s, keys);
+        assert_eq!(app.doc, format!("{sql}as"), "{keys}");
+    }
     for (keys, want) in [
         ("nguwowfi quay as|", "người quay á"),
         ("nguwowfi quay as?", "người quay á?"),

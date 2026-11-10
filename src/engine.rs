@@ -70,6 +70,9 @@ pub struct Config {
     /// Mức đổi tỉ lệ Anh/Việt trong cặp từ corpus sang tỉ lệ theo ngữ cảnh (`contextual`; 0 tắt, 1 đổi hẳn). Dev:
     /// 0/0,5/1 cho 311/308/310 từ sai, click đi rồi quay lại mỗi 4 từ 336/333/333.
     pub bigram_context: f64,
+    /// Như `bigram_context` và `cache_weight` nhưng ở đầu câu trong ô vừa đọc lại (`Engine::local_start`).
+    pub bigram_context_start: f64,
+    pub start_cache_weight: f64,
     /// Lúc chốt từ, hai phương án chênh dưới ngần này lần thì giữ phương án đang hiện (1 tắt). Dev: 1/1,5/2/2,5/3/4/10
     /// cho 317/316/307/307/309/317/328 từ sai.
     pub commit_stick: f64,
@@ -102,6 +105,8 @@ impl Default for Config {
             swap_penalty: 1e-5,
             commit_stick: 2.0,
             bigram_context: 0.5,
+            bigram_context_start: 1.0,
+            start_cache_weight: 0.9,
         }
     }
 }
@@ -151,6 +156,8 @@ pub struct Engine<'a> {
     join: usize,
     /// Từ trước viết hoa toàn bộ.
     prev_caps: bool,
+    /// Tiếng gần đây lấy từ chữ đọc được trong ô đang gõ (`resume`), không phải từ chỗ khác.
+    local: bool,
 }
 
 struct Last {
@@ -183,6 +190,10 @@ const RECENT: usize = 20;
 /// Số từ cuối của chữ trước con trỏ được tính vào tiếng gần đây khi lấy lại ngữ cảnh (`resume`).
 const RESUME_WORDS: usize = 8;
 
+/// Đọc lại ô được ngần này từ nói rõ thứ tiếng thì tiếng gần đây chỉ tính theo ô đó. Dev (click mỗi 4/8 từ): 0 (không
+/// thay)/2/3/5 cho 333/335/334/333 và 314/313/313/314; chọn 3.
+const RESUME_REPLACE: usize = 3;
+
 /// Trộn hai nguồn tần suất; None khi cả hai không biết từ/tiền tố này.
 fn mix(dom: Option<f64>, sub: Option<f64>, mu: f64) -> Option<f64> {
     (dom.is_some() || sub.is_some()).then(|| mu * dom.unwrap_or(0.0) + (1.0 - mu) * sub.unwrap_or(0.0))
@@ -211,6 +222,7 @@ impl<'a> Engine<'a> {
             after_word: false,
             join: 0,
             prev_caps: false,
+            local: false,
         }
     }
 
@@ -407,7 +419,9 @@ impl<'a> Engine<'a> {
             Some(c) => {
                 let n = self.recent.iter().filter(|&&l| l == lang).count() as f64;
                 let cache = (n + 1.0) / (self.recent.len() as f64 + 2.0);
-                let g = self.cfg.cache_weight;
+                // Đầu câu trong ô vừa đọc lại: tỉ lệ Anh/Việt theo từ trước chỉ là tỉ lệ đầu câu của corpus (phần lớn
+                // tiếng Việt), không nói gì về văn bản trong ô; tiếng các từ đọc được mới là bằng chứng chính.
+                let g = if self.local_start() { self.cfg.start_cache_weight } else { self.cfg.cache_weight };
                 (1.0 - g) * self.lang_after(c, self.prev_id, self.prev2_lang, self.prev_lang, lang) + g * cache
             }
             None => match self.prev_lang {
@@ -442,7 +456,8 @@ impl<'a> Engine<'a> {
                 let n = c.next_lang(id);
                 let l = if lang == Lang::Vn { 0 } else { 1 };
                 let corpus = (n[l] + 1.0) / (n[0] + n[1] + 2.0);
-                (self.prior(lang) / corpus).powf(self.cfg.bigram_context)
+                let x = if self.local_start() { self.cfg.bigram_context_start } else { self.cfg.bigram_context };
+                (self.prior(lang) / corpus).powf(x)
             }
             _ => 1.0,
         };
@@ -691,15 +706,26 @@ impl<'a> Engine<'a> {
         }
         // App chỉ đưa vài chục ký tự: từ đầu có thể bị cắt.
         let cut = usize::from(words.len() > 1 && words[0].0 == 0);
-        for &(s, e) in words.iter().skip(cut).rev().take(RESUME_WORDS).rev() {
-            let w: String = chars[s..e].iter().collect();
-            if let Some(l) = self.visible_lang(&w) {
-                self.prev2_lang = self.prev_lang;
-                self.prev_lang = Some(l);
-                self.recent.push_back(l);
-                if self.recent.len() > RECENT {
-                    self.recent.pop_front();
-                }
+        let langs: Vec<Lang> = words
+            .iter()
+            .skip(cut)
+            .rev()
+            .take(RESUME_WORDS)
+            .rev()
+            .filter_map(|&(s, e)| self.visible_lang(&chars[s..e].iter().collect::<String>()))
+            .collect();
+        // Đủ từ nói rõ thứ tiếng thì tiếng gần đây lấy theo chính ô này, bỏ phần gõ ở chỗ khác (vừa chat tiếng Việt rồi
+        // click vào trình soạn SQL).
+        self.local = langs.len() >= RESUME_REPLACE;
+        if self.local {
+            self.recent.clear();
+        }
+        for l in langs {
+            self.prev2_lang = self.prev_lang;
+            self.prev_lang = Some(l);
+            self.recent.push_back(l);
+            if self.recent.len() > RECENT {
+                self.recent.pop_front();
             }
         }
         let last: String = chars[ls..le].iter().collect();
@@ -715,6 +741,16 @@ impl<'a> Engine<'a> {
                 }
             }
         }
+    }
+
+    /// Không đọc lại được ô vừa vào (`resume` không chạy): tiếng gần đây không còn là của ô đang gõ.
+    pub fn leave_view(&mut self) {
+        self.local = false;
+    }
+
+    /// Đầu câu trong ô mà tiếng gần đây lấy từ chính chữ trong ô (`resume`).
+    fn local_start(&self) -> bool {
+        self.local && self.prev == START
     }
 
     /// Tiếng của một từ đã nằm trong app: so xác suất chữ đó là từ Việt và từ Anh, chênh dưới `informative_ratio`

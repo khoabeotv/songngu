@@ -704,9 +704,10 @@ impl<'a> Session<'a> {
                 // từ dính trước con trỏ đã nằm trong app: gõ tiếp vào chính nó
                 self.shown = w;
                 self.tail = None;
-            } else if self.resync && self.resume_context && !self.trusting() {
-                if let Some(b) = before {
-                    self.eng.resume(b);
+            } else if self.resync {
+                match before.filter(|_| self.resume_context && !self.trusting()) {
+                    Some(b) => self.eng.resume(b),
+                    None => self.eng.leave_view(),
                 }
             }
             self.resync = false;
