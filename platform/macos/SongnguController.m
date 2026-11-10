@@ -7,6 +7,8 @@
 
 static SnHandle *gEngine;
 static NSString *gApp;
+// Ô nhập đang mở phiên với bộ gõ: đường chặn phím lật qua nó khi app giữ Shift/Ctrl+Esc cho mình (songnguFlipFromTap).
+static id gClient;
 
 NSString *songnguSupportFile(NSString *name) {
     return [NSHomeDirectory() stringByAppendingPathComponent:[@"Library/Application Support/Songngu" stringByAppendingPathComponent:name]];
@@ -121,6 +123,18 @@ static void apply(SnAction a, id sender) {
     if (commit.length || replace.location != NSNotFound) [sender insertText:commit replacementRange:replace];
 }
 
+BOOL songnguFlipFromTap(NSString *bundle) {
+    if (!gEngine || !gClient || ![[gClient bundleIdentifier] isEqualToString:bundle]) return NO;
+    songnguSetApp(bundle);
+    sn_set_blind(gEngine, false);
+    NSString *before = textBefore(gClient);
+    SnAction a = sn_event(gEngine, SN_FLIP, 0, before.UTF8String);
+    trace(gClient, [NSString stringWithFormat:@"tap flip before=[%@] -> commit=[%@] replace=%u pass=%d", before ?: @"(nil)",
+                                              @(a.commit), a.replace_before, a.pass]);
+    apply(a, gClient);
+    return !a.pass;
+}
+
 @interface SongnguController : IMKInputController
 @end
 
@@ -133,6 +147,7 @@ static void apply(SnAction a, id sender) {
 - (void)activateServer:(id)sender {
     [super activateServer:sender];
     trace(sender, @"activate");
+    gClient = sender;
     songnguLoad();
     keyTapSession([sender bundleIdentifier], YES);
     songnguSetApp([sender bundleIdentifier]);
@@ -147,6 +162,7 @@ static void apply(SnAction a, id sender) {
     NSString *bundle = [sender bundleIdentifier];
     if (keyTapOwns(bundle)) return NO;
     keyTapSession(bundle, YES);
+    gClient = sender;
     static BOOL asked;
     if (!asked && !keyTapRunning() && bundle && sn_tap_app(gEngine, bundle.UTF8String)) {
         // app cần chặn phím (terminal) mà chưa có quyền: hỏi một lần mỗi lần bộ gõ chạy
@@ -178,6 +194,7 @@ static void apply(SnAction a, id sender) {
 - (void)deactivateServer:(id)sender {
     trace(sender, @"deactivate");
     keyTapSession([sender bundleIdentifier], NO);
+    if (gClient == sender) gClient = nil;
     [self commitComposition:sender];
     if (gEngine) sn_save_memory(gEngine);
     [super deactivateServer:sender];

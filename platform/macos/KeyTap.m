@@ -127,6 +127,16 @@ static CGEventRef onEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef ev
     if (type != kCGEventKeyDown) return ev;
     NSString *bundle = targetBundle(ev);
     BOOL listed = sn_tap_app(h, bundle.UTF8String);
+    // Shift/Ctrl+Esc ở app đi đường InputMethodKit: vài app tự giữ Esc có phím bổ trợ, không đưa qua bộ gõ (TablePlus),
+    // nên lật ngay tại đây qua ô nhập đang mở phiên. Không có gì để lật thì phím tới app như thường.
+    CGEventFlags flags = CGEventGetFlags(ev);
+    if (!listed && code == kVK_Escape && [bundle isEqualToString:gSession] &&
+        (flags & (kCGEventFlagMaskShift | kCGEventFlagMaskControl)) &&
+        !(flags & (kCGEventFlagMaskCommand | kCGEventFlagMaskAlternate))) {
+        if (!songnguFlipFromTap(bundle)) return ev;
+        [gSwallowed addIndex:code];
+        return NULL;
+    }
     // App không mở phiên nhập liệu (terminal kiểu gpui, Flutter ở vài máy): phím không bao giờ tới bộ gõ, đường này lo.
     // Bỏ qua phím giữ lặp (game, phím di chuyển). Phím cho đi qua thì đánh dấu, phòng phiên mở muộn hơn phím.
     // Cửa sổ cài đặt (không có ô nhập chữ) cũng không mở phiên: bỏ qua, phím của nó là phím tắt.

@@ -14,6 +14,8 @@ SnHandle *songnguEngine(void);
 void songnguSetApp(NSString *bundle);
 // Phím -> loại sự kiện của engine (SN_*); `ch` là ký tự khi SN_CHAR.
 uint32_t songnguEventKind(NSEvent *event, uint32_t *ch);
+// Lật (như Shift/Ctrl+Esc) ở ô nhập đang mở phiên của app `bundle`; NO nếu không có gì để lật (phím đi tiếp tới app).
+BOOL songnguFlipFromTap(NSString *bundle);
 
 // Đường chặn phím (cần quyền Trợ năng): app trong danh sách `sn_tap_app` nhận chữ bằng Backspace + phím Unicode giả.
 void keyTapStart(void);
