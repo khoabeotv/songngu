@@ -1,0 +1,80 @@
+select count(*) as total from orders where shop_id = 42
+SELECT date_trunc('day', created_at) AS day, sum(amount) AS revenue FROM payments GROUP BY 1 ORDER BY 1
+DELETE FROM sessions WHERE expires_at < now()
+CREATE TABLE invoices (id bigserial primary key, order_id bigint not null references orders(id), amount numeric(12, 2) not null default 0)
+CREATE INDEX CONCURRENTLY idx_orders_shop_created ON orders (shop_id, created_at)
+WITH recent AS (SELECT * FROM orders WHERE created_at > now() - interval '7 days') SELECT status, count(*) FROM recent GROUP BY status
+SELECT u.id, u.name, coalesce(sum(o.total), 0) AS spent FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id, u.name HAVING sum(o.total) > 1000
+SELECT DISTINCT city FROM addresses WHERE country = 'VN' ORDER BY city
+UPDATE users SET last_login_at = now(), login_count = login_count + 1 WHERE id = $1
+select o.id, string_agg(i.sku, ', ') as skus from orders o join order_items i on i.order_id = o.id group by o.id
+begin; update accounts set balance = balance - 100 where id = 1; update accounts set balance = balance + 100 where id = 2; commit;
+select table_name, column_name, data_type from information_schema.columns where table_name = 'orders'
+TRUNCATE TABLE import_staging RESTART IDENTITY
+INSERT INTO audit_log (actor_id, action, payload) SELECT id, 'login', '{}'::jsonb FROM users WHERE id = 5
+select count(distinct user_id) as buyers from orders where created_at >= '2024-01-01'
+SELECT o.id AS order_id, s.name AS shop FROM orders o INNER JOIN shops s ON s.id = o.shop_id WHERE s.active
+SELECT product_id, sum(quantity) AS sold FROM order_items GROUP BY product_id ORDER BY sold DESC LIMIT 10
+SELECT EXISTS (SELECT 1 FROM users WHERE email = 'a@b.com') AS taken
+CREATE VIEW active_users AS SELECT * FROM users WHERE deleted_at IS NULL
+select u.name as user_name, r.name as role_name from users u join roles r on r.id = u.role_id
+SELECT now() - max(created_at) AS lag FROM events
+SELECT 'order' AS kind, id FROM orders UNION ALL SELECT 'refund' AS kind, id FROM refunds
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly
+SELECT shop_id, count(*) FILTER (WHERE status = 'paid') AS paid, count(*) AS all_orders FROM orders GROUP BY shop_id
+select * from orders where note ilike '%gift%' order by id desc
+please take a look at the migration before we merge it
+Can you check whether the job is still running on the staging server?
+Let's ship this as soon as the review is done
+We should add an index on shop_id since most queries filter by it
+Is there a reason we use a separate table for this?
+fix: handle empty payload in the import worker
+chore: bump dependencies and remove unused imports
+docs: explain how to run the migration locally
+Could you send me the logs from yesterday?
+I can pair with you on this after lunch if you want
+We need to decide whether to support the old API version
+It works on my machine but fails in CI
+The query was slow because it did a full table scan
+I will update the ticket once the fix is verified
+We can use a feature flag to roll this out gradually
+What is the expected behavior when the user cancels the order?
+The memory usage keeps growing until the process is killed
+It is not clear to me what this function is supposed to return
+The data is stored as JSON, so we need to parse it first
+I'm going to revert the last commit and investigate
+Our customers reported that the export takes too long
+I renamed the variable to make its purpose clearer
+Is it safe to run the backfill during business hours?
+I'll be out of office on Friday
+The bug only happens when two requests arrive at the same time
+The PR is ready for another round of review
+We need to document the new environment variables
+Do you have access to the production database?
+The import job processes about ten thousand rows per minute
+The function returns null if the user does not exist
+Please assign this ticket to me
+I think we should split this into two smaller pull requests
+The API is rate limited to one hundred requests per second
+The cron job runs every hour at minute five
+I pushed a fix, can you try again?
+Let me double check the numbers and get back to you
+The page loads slowly on mobile because of the large images
+This is a known issue, there is a ticket for it already
+We use the same approach in the inventory service
+The report should be ready by the end of the week
+I am still waiting for access to the analytics account
+We have to support both formats until the migration is complete
+The logs show a timeout when calling the payment provider
+The numbers in the dashboard do not match the database
+We can drop the old column after the next release
+I added comments to explain the tricky parts
+Please review when you have time, no rush
+The test is flaky because it depends on the current time
+The client sends the date as a string, so we parse it on the server
+The script deletes temporary files older than a day
+Let me know when the deploy is done
+The background job sends an email once the export is finished
+The validation is done both on the client and on the server
+The service is deployed as a single container
+We should alert on the error rate rather than the error count

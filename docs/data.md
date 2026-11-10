@@ -7,6 +7,8 @@ Từ điển đi kèm (`data/`):
 | `vi_50k.txt` | [FrequencyWords](https://github.com/hermitdave/FrequencyWords) (Hermit Dave), OpenSubtitles 2018 | CC BY-SA 4.0 |
 | `en_words.txt` | `en_50k.txt` của FrequencyWords, giữ từ chữ thường ≥2 ký tự mà bộ kiểm chính tả macOS (`NSSpellChecker`, en_US) chấp nhận ở dạng thường hoặc viết hoa đầu | CC BY-SA 4.0 (dẫn xuất) |
 | `en_dev.txt` | Tự soạn: thuật ngữ công việc/công nghệ thiếu trong phụ đề | của dự án |
+
+Bộ đo tiếng Anh/SQL (`tools/eval/data/en_sql_{dev,test}.txt`, 0,9k từ mỗi bộ): tự soạn, câu SQL và tin nhắn/commit/review tiếng Anh kiểu dân IT, chia xen kẽ dòng thành dev/test. Không dùng để học.
 | `vi_extra.txt` | Tự ước lượng | của dự án |
 
 - `vi_50k.txt` mất hầu hết âm tiết một chữ thuộc khối U+1Exx (ở, ạ, ừ, ồ…): bộ tách từ của FrequencyWords bỏ token một ký tự dạng NFC. `vi_extra.txt` bù số đếm ước lượng, cộng vào số đếm gốc.

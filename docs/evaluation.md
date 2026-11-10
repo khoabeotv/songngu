@@ -11,6 +11,8 @@ Văn bản đo: mỗi dòng một tin nhắn, đáp án là chính chữ đó (s
 - `--typos R`: tỉ lệ R từ gõ nhầm không sửa (phím bên cạnh, sót, lặp, đảo phím). Từ đó không chấm vì sai đằng nào người gõ cũng phải sửa; chỉ đo ảnh hưởng lên các từ còn lại.
 - `--seed N`: đổi ngẫu nhiên.
 
+Bộ đo: chat (A, B, test), kỹ thuật, FineWeb, và tiếng Anh/SQL (`ensql`: ô toàn tiếng Anh như trình soạn SQL; `--clicks 1` là mỗi từ gõ sau khi click vào ô có sẵn chữ).
+
 Từ sai đo qua lớp bộ gõ (`eval-session`; đường thay chữ và xoá lùi cho cùng số từ sai). Sửa-khi-Space và đổi giữa từ đo ở mức engine (`eval`).
 
 ## Kết quả (bộ test)

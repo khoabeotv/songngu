@@ -1,0 +1,81 @@
+SELECT id, name, email FROM users WHERE status = 'active' ORDER BY created_at DESC LIMIT 20
+SELECT o.id, o.total, u.name AS customer FROM orders o JOIN users u ON u.id = o.user_id
+update orders set status = 'cancelled' where id = 1024
+INSERT INTO tags (name, color) VALUES ('urgent', 'red'), ('later', 'gray')
+ALTER TABLE products ADD COLUMN archived boolean NOT NULL DEFAULT false
+select p.name, max(v.price) as max_price, min(v.price) as min_price from products p join variations v on v.product_id = p.id group by p.name
+select * from customers where email like '%@gmail.com' and deleted_at is null
+explain analyze select * from orders where shop_id = 7 and status = 'pending'
+select case when total > 500 then 'large' when total > 100 then 'medium' else 'small' end as size, count(*) from orders group by size
+SELECT id FROM orders WHERE id NOT IN (SELECT order_id FROM invoices)
+SELECT * FROM products WHERE price BETWEEN 100 AND 500 AND stock > 0
+SELECT pg_size_pretty(pg_total_relation_size('orders')) AS size
+SELECT u.email, o.created_at FROM users u JOIN LATERAL (SELECT created_at FROM orders WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) o ON true
+select status, avg(total) as avg_total, percentile_cont(0.5) within group (order by total) as median from orders group by status
+SELECT id, payload->>'source' AS source FROM events WHERE payload ? 'source' LIMIT 50
+DROP TABLE IF EXISTS tmp_export
+select * from pg_stat_activity where state = 'active' and query not like '%pg_stat_activity%'
+update products set name = trim(name) where name <> trim(name)
+select extract(hour from created_at) as hour, count(*) from orders group by hour order by hour
+SELECT row_number() OVER (PARTITION BY shop_id ORDER BY total DESC) AS rank, id, total FROM orders
+ALTER TABLE orders ALTER COLUMN note TYPE text
+delete from carts where updated_at < now() - interval '30 days' returning id
+select id, name from shops where id = any(array[1, 2, 3])
+select json_build_object('id', id, 'name', name) as item from products limit 5
+VACUUM ANALYZE orders
+SELECT a.id, b.id FROM accounts a CROSS JOIN accounts b WHERE a.id < b.id
+I think the issue is that the cache is not invalidated after the update
+The build failed again because of a flaky test, retrying now
+Thanks, that makes sense to me
+I left a few comments, mostly about naming and error handling
+The endpoint returns 500 when the payload is empty
+feat: add pagination to the orders endpoint
+refactor: move pricing logic into its own module
+Sorry for the late reply, I was in a meeting all morning
+This looks good to me, approved
+The deploy went out at 3pm and everything looks stable so far
+As far as I know, the rate limit is per user, not per shop
+Has anyone seen this error before?
+Let me know if you need anything else from me
+Please don't force push to the main branch
+The new dashboard is live, feedback is welcome
+I added a test case for the edge case you mentioned
+We should probably log the request id as well
+Can we schedule a quick call to go over the design?
+Good catch, I missed that one
+This change is backward compatible as long as clients send the new field
+The tests pass locally, so it must be something in the environment
+We already have a helper for this in the utils folder
+The worker crashed at midnight and nobody noticed until morning
+Make sure the timeout is longer than the slowest request
+Let's keep the old behavior for now and revisit later
+I am not sure this is the best approach, but it works
+This was fixed in the latest release
+I tried restarting the service but it did not help
+We could cache the result for a few minutes to reduce load
+I updated the README with the new setup steps
+The alert fired because the queue was backed up
+There is a typo in the error message
+Once this is merged, I will start on the frontend part
+We should test this with real data before releasing it
+The connection pool is exhausted under heavy load
+I added a retry with exponential backoff
+Who owns the billing service now?
+The schema change requires a short downtime
+I would rather fix the root cause than add another workaround
+Can you share your screen?
+It seems the webhook is called twice for every order
+Thanks for the quick fix, it works now
+I suggest we use a queue instead of calling the API directly
+I will write a short summary of the incident
+Is the staging environment down for everyone or just me?
+The new version is about twice as fast as the old one
+We should not expose internal ids in the public API
+I agree with your point about naming
+We need a better way to handle partial failures
+This feature is behind a flag, so it is safe to merge
+I could not reproduce the issue on my side
+Can we move the meeting to tomorrow morning?
+I think it is better to return an empty list than null
+This might be related to the timezone settings
+I merged the changes and closed the ticket

@@ -8,11 +8,11 @@ set=$1 model=$2
 shift 2
 B=target/release/songngu
 if [ "$set" = dev ]; then
-  names=(chatA chatB tech fineweb)
-  files=(corpus/chatgen/dev_a.txt corpus/chatgen/dev_b.txt corpus/tech/dev.txt corpus/fineweb/dev.txt)
+  names=(chatA chatB tech fineweb ensql)
+  files=(corpus/chatgen/dev_a.txt corpus/chatgen/dev_b.txt corpus/tech/dev.txt corpus/fineweb/dev.txt tools/eval/data/en_sql_dev.txt)
 else
-  names=(chat tech fineweb)
-  files=(corpus/chatgen/test.txt corpus/tech/test.txt corpus/fineweb/test.txt)
+  names=(chat tech fineweb ensql)
+  files=(corpus/chatgen/test.txt corpus/tech/test.txt corpus/fineweb/test.txt tools/eval/data/en_sql_test.txt)
 fi
 modes=("" "--realistic" "--typos 0.05")
 tmp=$(mktemp -d)
