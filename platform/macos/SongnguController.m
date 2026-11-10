@@ -107,7 +107,10 @@ static void apply(SnAction a, id sender) {
         NSRange sel = [sender selectedRange];
         NSString *bundle = [sender bundleIdentifier];
         if (sel.location != NSNotFound && sel.location >= a.replace_before) {
-            replace = NSMakeRange(sel.location - a.replace_before, a.replace_before);
+            // Chữ đang chọn sau con trỏ (Chrome tự điền phần còn lại của địa chỉ, ô tìm kiếm gợi ý): phím gõ thường thay
+            // luôn phần chọn, nên thay chữ cũng thay cả nó. Bỏ sót thì phần gợi ý thành chữ thật ("hả" + "goo.com.vn").
+            NSUInteger tail = sel.length == NSNotFound ? 0 : sel.length;
+            replace = NSMakeRange(sel.location - a.replace_before, a.replace_before + tail);
             noCursor = 0;
         } else {
             noCursor = [bundle isEqualToString:noCursorApp] ? noCursor + 1 : 1;
