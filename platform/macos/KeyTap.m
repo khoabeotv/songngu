@@ -15,6 +15,9 @@ static NSMutableDictionary<NSNumber *, NSString *> *gPidBundle;
 static NSMutableIndexSet *gSwallowed;  // phím đã nuốt keyDown: nuốt luôn keyUp
 static BOOL gTyping;                // phím gần nhất đi đường chặn phím (click chuột thì kết thúc từ)
 static NSString *gSession;          // app đang mở phiên nhập liệu với bộ gõ (activateServer)
+// Phím đang xử lý tới một app không ở trước mặt (ô nổi như ô gõ nhanh của Claude, Raycast): phím giả gửi thẳng vào
+// tiến trình đó. Gửi vào phiên như thường thì hệ thống chuyển chúng cho app trước mặt.
+static pid_t gPostPid;
 
 BOOL keyTapRunning(void) {
     return gTap && CGEventTapIsEnabled(gTap);
@@ -64,7 +67,8 @@ static void post(CGEventTapProxy proxy, CGKeyCode code, const UniChar *chars, Un
         CGEventSetFlags(e, 0);
         if (n) CGEventKeyboardSetUnicodeString(e, n, chars);
         CGEventSetIntegerValueField(e, kCGEventSourceUserData, SN_SYNTHETIC);
-        if (proxy) CGEventTapPostEvent(proxy, e);
+        if (gPostPid > 0) CGEventPostToPid(gPostPid, e);
+        else if (proxy) CGEventTapPostEvent(proxy, e);
         else CGEventPost(kCGSessionEventTap, e);
         CFRelease(e);
     }
@@ -93,6 +97,7 @@ BOOL keyTapPostEdit(uint32_t erase, NSString *text) {
                              options:NSStringEnumerationByComposedCharacterSequences
                           usingBlock:^(NSString *s, NSRange r, NSRange er, BOOL *stop) { n++; }];
     gPendingIMK += n;
+    gPostPid = 0;
     apply(NULL, erase, text);
     return YES;
 }
@@ -111,7 +116,12 @@ static CGEventRef onEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef ev
     }
     if (CGEventGetIntegerValueField(ev, kCGEventSourceUserData) == SN_SYNTHETIC) return ev;
     SnHandle *h = songnguEngine();
-    if (!h || !gSelected) return ev;
+    if (!h || !gSelected) {
+        if (type == kCGEventKeyDown && songnguTracing())
+            songnguTrace([NSString stringWithFormat:@"skip key=%lld engine=%d selected=%d front=%@", CGEventGetIntegerValueField(ev, kCGKeyboardEventKeycode),
+                                                    h != NULL, gSelected, keyTapFrontApp()]);
+        return ev;
+    }
     if (type == kCGEventLeftMouseDown || type == kCGEventRightMouseDown || type == kCGEventOtherMouseDown) {
         // click có thể dời con trỏ: không sửa chữ trước nó nữa
         if (gTyping) sn_commit_all(h);
@@ -143,6 +153,11 @@ static CGEventRef onEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef ev
     BOOL orphan = !listed && ![bundle isEqualToString:gSession] && ![bundle hasPrefix:@"com.songngu."] &&
                   !sn_option_get(h, "manual_tap") &&
                   !CGEventGetIntegerValueField(ev, kCGKeyboardEventAutorepeat);
+    pid_t target = (pid_t)CGEventGetIntegerValueField(ev, kCGEventTargetUnixProcessID);
+    gPostPid = (target > 0 && target != getpid() && ![bundle isEqualToString:keyTapFrontApp()]) ? target : 0;
+    if (songnguTracing())
+        songnguTrace([NSString stringWithFormat:@"key=%u target=%@ pid=%d front=%@ session=%@ listed=%d orphan=%d post=%d", code, bundle,
+                                                target, keyTapFrontApp(), gSession, listed, orphan, gPostPid]);
     if (!listed && !orphan) {
         gTyping = NO;
         return ev;
@@ -156,13 +171,16 @@ static CGEventRef onEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef ev
     uint32_t kind = songnguEventKind(e, &ch);
     SnAction a = sn_event(h, kind, ch, NULL);
     NSString *text = [NSString stringWithUTF8String:a.commit];
+    if (songnguTracing())
+        songnguTrace([NSString stringWithFormat:@"  kind=%u ch=%C -> commit=[%@] erase=%u pass=%d", kind, (unichar)(ch ?: '-'), text, a.erase, a.pass]);
     if (a.pass) {
         if (a.erase == 0 && !text.length) return ev;
         // sửa chữ trước rồi mới tới phím của app: bắn lại chính phím đó sau phần sửa
         apply(proxy, a.erase, text);
         CGEventRef copy = CGEventCreateCopy(ev);
         CGEventSetIntegerValueField(copy, kCGEventSourceUserData, SN_SYNTHETIC);
-        CGEventTapPostEvent(proxy, copy);
+        if (gPostPid > 0) CGEventPostToPid(gPostPid, copy);
+        else CGEventTapPostEvent(proxy, copy);
         CFRelease(copy);
         return NULL;
     }

@@ -12,6 +12,9 @@ NSString *songnguSupportFile(NSString *name);
 SnHandle *songnguEngine(void);
 // Đổi app đang gõ: kết thúc từ dở ở app cũ rồi áp cài đặt của app mới.
 void songnguSetApp(NSString *bundle);
+// Ghi vết (file `trace` có sẵn lúc bộ gõ chạy): trace.log, xem SongnguController.m.
+BOOL songnguTracing(void);
+void songnguTrace(NSString *what);
 // Phím -> loại sự kiện của engine (SN_*); `ch` là ký tự khi SN_CHAR.
 uint32_t songnguEventKind(NSEvent *event, uint32_t *ch);
 // Lật (như Shift/Ctrl+Esc) ở ô nhập đang mở phiên của app `bundle`; NO nếu không có gì để lật (phím đi tiếp tới app).

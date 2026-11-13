@@ -76,6 +76,17 @@ static FILE *traceFile(void) {
     return f;
 }
 
+BOOL songnguTracing(void) {
+    return traceFile() != NULL;
+}
+
+void songnguTrace(NSString *what) {
+    FILE *f = traceFile();
+    if (!f) return;
+    fprintf(f, "%.3f tap %s\n", CFAbsoluteTimeGetCurrent(), what.UTF8String);
+    fflush(f);
+}
+
 static void trace(id sender, NSString *what) {
     FILE *f = traceFile();
     if (!f) return;

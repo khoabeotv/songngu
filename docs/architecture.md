@@ -35,6 +35,7 @@ Không có vùng soạn (gạch chân): mỗi phím vào app ngay; engine đổi
   - App không cho đọc chữ (Zalo, vài app Flutter) thì thay theo vị trí con trỏ, không kiểm.
 - **Chặn phím** (`KeyTap.m`; terminal, app tự phát hiện ở trên, menu "Chặn phím ở app này", và mọi phím rơi vào app đang không mở phiên nhập liệu với bộ gõ): bắt phím ở cấp phiên (CGEventTap, cần quyền Trợ năng), xoá bằng Backspace giả rồi gõ chữ mới bằng phím mang chuỗi Unicode; phím không đổi gì thì để phím thật đi qua.
   - Không đọc được chữ trong app nên chỉ mở lại được từ bộ gõ vừa đưa vào; click chuột, Enter, mũi tên kết thúc từ.
+  - Phím tới app không ở trước mặt (ô nổi như ô gõ nhanh của Claude): phím giả gửi thẳng vào tiến trình đó (`CGEventPostToPid`). Gửi vào phiên thì hệ thống giao chúng cho app trước mặt, phần sửa chữ rơi sang ô của app khác.
   - App không mở phiên nhập liệu (`activateServer`/`deactivateServer`; terminal của Herdr, vài app Flutter trên một số máy) thì phím không bao giờ tới lớp IMK: đường này tự lo, bỏ qua phím giữ lặp, và đánh dấu phím cho đi qua để IMK không xử lý lại nếu phiên mở muộn hơn phím. Chỗ không có ô nhập (danh sách thư, Finder) cũng rơi vào đây: gõ kiểu `dd`, `as` vẫn có thể sinh Backspace giả, như bộ gõ chặn phím. Tắt bằng tuỳ chọn `manual_tap`.
   - Chỉ chạy khi Songngu là nguồn nhập đang chọn. Chưa có quyền thì lớp IMK thử ký tự DEL qua `insertText` (Ghostty bỏ qua).
   - Bộ gõ chặn phím khác (XKey, EVKey...) chạy cùng thì hai bên giành phím: Ctrl+Space không đổi nguồn nhập, app không gửi phím qua bộ gõ.
@@ -64,4 +65,4 @@ Hành vi chung:
 - `Info.plist` khai báo nguồn nhập; biểu tượng `icon.pdf` (vẽ bằng `mkicon.m`) là ảnh template 20×16 pt, hệ thống tô theo giao diện sáng/tối.
 - `build.sh` ký bằng chứng chỉ "Songngu Dev" nếu có trong keychain: quyền Trợ năng gắn với chứng chỉ nên còn nguyên qua các lần build. Không có thì ký ad-hoc, mỗi lần build phải cấp lại quyền.
 - Phát hành cho người khác: cần ký Developer ID (`codesign --options runtime --sign "Developer ID Application: …"`), notarize (`xcrun notarytool submit … --wait`) và `xcrun stapler staple`; xem lại điều kiện phân phối mô hình trong `NOTICE`.
-- Ghi vết gỡ lỗi: tạo file `~/Library/Application Support/Songngu/trace` rồi khởi động lại bộ gõ; `trace.log` cạnh đó ghi mọi sự kiện kèm chữ gõ. Xoá cả hai khi xong.
+- Ghi vết gỡ lỗi: tạo file `~/Library/Application Support/Songngu/trace` rồi khởi động lại bộ gõ; `trace.log` cạnh đó ghi mọi sự kiện kèm chữ gõ, cả đường chặn phím (dòng `tap`: app đích, app trước mặt, có xử lý không). Xoá cả hai khi xong.
