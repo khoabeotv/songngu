@@ -15,7 +15,7 @@ use songngu::engine::{Config, Engine, Lang, View};
 use songngu::syllable::split_tone;
 use songngu::typing::{scored_words, Habits, Typist, Unit, BS, SKIP};
 
-const VALUE_OPTS: [&str; 37] = [
+const VALUE_OPTS: [&str; 38] = [
     "--bigram-context",
     "--en-bias",
     "--commit-stick",
@@ -48,6 +48,7 @@ const VALUE_OPTS: [&str; 37] = [
     "--dump-want",
     "--cache",
     "--unseen-vn",
+    "--teen",
     "--word-switch",
     "--band",
     "--out",
@@ -119,6 +120,9 @@ fn main() {
     cfg.bigram = !args.iter().any(|a| a == "--no-bigram");
     cfg.lookahead_switch = !args.iter().any(|a| a == "--no-look-switch");
     cfg.join = !args.iter().any(|a| a == "--no-join");
+    if let Some(v) = arg(&args, "--teen") {
+        cfg.teen = v.parse().unwrap();
+    }
     if let Some(v) = arg(&args, "--unseen-vn") {
         cfg.unseen_vn = v.parse().unwrap();
     }

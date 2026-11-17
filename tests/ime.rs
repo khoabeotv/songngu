@@ -692,6 +692,25 @@ fn the_last_word_of_a_message_prefers_the_option_that_ends_sentences() {
 }
 
 #[test]
+fn teen_code_onsets_type_as_vietnamese_but_english_words_stay() {
+    // zậy, zẻ, wỷ, kó, jì: corpus không có, ước theo vậy, vẻ, quỷ, có, gì
+    let (vn, en) = lex();
+    let mut s = Session::new(Engine::new(vn, en, Config::default()).with_context(ctx()));
+    let mut app = App::default();
+    app.run(&mut s, "sao zaajy, lafm zif zij? zui zer nhes ");
+    assert_eq!(app.doc, "sao zậy, làm zì zị? zui zẻ nhé ");
+    let mut app = App::default();
+    app.run(&mut s, "con wyr nayf, ween roofi, wf, uwowcs gif wa ");
+    assert_eq!(app.doc, "con wỷ này, wên rồi, ừ, ước gì ưa ");
+    let mut app = App::default();
+    app.run(&mut s, "anh kos ddi khoong, kuxng ddc, lafm jif dzaajy, kis teen ");
+    assert_eq!(app.doc, "anh kó đi không, kũng đc, làm jì dzậy, kí tên ");
+    let mut app = App::default();
+    app.run(&mut s, "anh ddi zoom zero zips zone, what was wry, key kits jar jobs ");
+    assert_eq!(app.doc, "anh đi zoom zero zips zone, what was wry, key kits jar jobs ");
+}
+
+#[test]
 fn a_non_syllable_form_flipped_to_once_comes_back_by_itself() {
     // "ừk", "đzai" không phải âm tiết Việt: chỉ ra được bằng Ctrl/Shift+Esc. Đã lật một lần thì lần sau tự ra, và
     // trang Đã học hiện đúng chữ.

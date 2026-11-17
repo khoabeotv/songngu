@@ -50,6 +50,9 @@ pub struct Config {
     pub join: bool,
     /// Âm tiết đúng luật chưa gặp bao giờ tính như gặp nghần này lần trong danh sách tần suất (0 = không phải từ).
     pub unseen_vn: f64,
+    /// Xác suất từ teen code thay âm đầu (zậy, wỷ, kó, jì) = ngần này × xác suất các từ gốc (`teen_onset`, `teen_w`);
+    /// 0 = không nhận. Số đo: docs/evaluation.md.
+    pub teen: f64,
     /// Độ mạnh làm mượt xác suất đổi tiếng theo từng từ trước (`lang_after`); 0 = chỉ theo tiếng hai từ trước.
     pub word_switch: f64,
     pub telex: TelexOpts,
@@ -94,6 +97,7 @@ impl Default for Config {
             lookahead_switch: true,
             join: true,
             unseen_vn: 0.0003,
+            teen: 0.0003,
             word_switch: 10.0,
             telex: TelexOpts::default(),
             en_bias: 1.0,
@@ -277,12 +281,69 @@ impl<'a> Engine<'a> {
         if self.comp.undone {
             return None;
         }
+        if let Some((_, p)) = self.teen_w() {
+            return Some(p);
+        }
+        self.syllable_vn().or_else(|| self.personal_vn()).or_else(|| self.teen_onset())
+    }
+
+    /// Âm tiết Việt đúng như composer ghép.
+    fn syllable_vn(&self) -> Option<f64> {
         let (s, t) = (self.comp.toneless(), self.comp.tone);
         mix(self.ctx.and_then(|c| c.vn.word_prob(&s, t)), self.vn.word_prob(&s, t), self.mu())
             // âm tiết hiếm (đờ, giúm, xuê) có thật nhưng ngoài phụ đề và corpus: vẫn còn là phương án, để ngữ cảnh quyết.
             // Chỉ khi có ngữ cảnh: không có thì từ Anh lạ cũng không có xác suất, ROAS sẽ thành ROÁ.
             .or_else(|| self.ctx.and(self.vn.unseen_prob(&s, t, self.cfg.unseen_vn)))
-            .or_else(|| self.personal_vn())
+    }
+
+    /// Teen code thay âm đầu (zậy = vậy, wá = quá): danh sách tần suất và corpus gần như không có, nên ước bằng `ratio`
+    /// lần tổng xác suất các từ có âm đầu gốc `onsets` cùng vần `rest`. Chỉ cả từ, như `personal_vn`.
+    fn teen_prob(&self, onsets: &[&str], rest: &[char], t: crate::syllable::Tone, ratio: f64) -> Option<f64> {
+        if ratio <= 0.0 || rest.is_empty() || self.comp.undone || self.ctx.is_none() {
+            return None;
+        }
+        let p: f64 = onsets
+            .iter()
+            .filter(|&&o| o != "g" || rest.first() == Some(&'i')) // g chỉ cho gì, gìn (gi + i viết gọn)
+            .filter_map(|o| {
+                let alias: Vec<char> = o.chars().chain(rest.iter().copied()).collect();
+                mix(self.ctx.and_then(|c| c.vn.word_prob(&alias, t)), self.vn.word_prob(&alias, t), self.mu())
+            })
+            .sum();
+        (p > 0.0).then_some(p * ratio)
+    }
+
+    /// Âm đầu teen code gõ thẳng bằng chữ (không đụng phím Telex): z, dz thay v, d, gi (zậy, dzui, zìa); k thay c (kó,
+    /// kũng); j thay gi, d (jì, jờ). f thay ph thì không: "fair", "forms" thành fải, fos mà "fải" vẫn thua "fair".
+    fn teen_onset(&self) -> Option<f64> {
+        const TEEN: [(&str, &[&str]); 4] = [("dz", &["d", "v", "gi"]), ("z", &["v", "d", "gi"]), ("k", &["c"]), ("j", &["gi", "d", "g"])];
+        let (s, t) = (self.comp.toneless(), self.comp.tone);
+        TEEN.iter().find_map(|(teen, onsets)| {
+            let pre: Vec<char> = teen.chars().collect();
+            self.teen_prob(onsets, s.strip_prefix(&pre[..])?, t, self.cfg.teen)
+        })
+    }
+
+    /// w thay qu: wỷ, wá, wên. Telex đọc w đầu từ là ư (ưa, ừ, ước), nên đây là cách đọc thứ hai của cùng các phím, chỉ
+    /// thắng khi khả năng cao hơn cách đọc ư ("wa" vẫn là ưa). Trả chữ hiện ("w" + vần, dấu đặt như sau "qu").
+    fn teen_w(&self) -> Option<(String, f64)> {
+        let first = self.keys.chars().next()?;
+        let s = self.comp.toneless();
+        if !matches!(first, 'w' | 'W') || s.first() != Some(&'ư') {
+            return None;
+        }
+        let t = self.comp.tone;
+        let p = self.teen_prob(&["qu"], &s[1..], t, self.cfg.teen)?;
+        if self.syllable_vn().is_some_and(|q| q >= p) {
+            return None;
+        }
+        let alias: Vec<char> = "qu".chars().chain(s[1..].iter().copied()).collect();
+        let toned = crate::syllable::apply_tone(&alias, t, self.cfg.modern);
+        let mut text = String::from(first);
+        for (c, l) in toned[2..].iter().zip(&self.comp.letters[1..]) {
+            text.extend(if l.upper { c.to_uppercase().collect::<Vec<_>>() } else { vec![*c] });
+        }
+        Some((text, p))
     }
 
     /// Dạng không phải âm tiết Việt mà người dùng đã lật sang (ừk, đzai, ák): ai đã viết kiểu đó thì hay viết lại,
@@ -478,7 +539,10 @@ impl<'a> Engine<'a> {
     }
 
     fn vn_text(&self) -> String {
-        self.comp.render(self.cfg.modern)
+        match self.teen_w() {
+            Some((text, _)) if !self.comp.undone => text,
+            _ => self.comp.render(self.cfg.modern),
+        }
     }
 
     pub fn key(&mut self, k: char) -> View {
@@ -509,7 +573,12 @@ impl<'a> Engine<'a> {
         }
         let v = self.view();
         let keys = if v.lang == Lang::Vn && v.differs() && !self.comp.undone {
-            self.comp.canonical_keys(1, self.cfg.modern)
+            match self.teen_w() {
+                // "wỷ" -> "w": gõ lại chữ đang hiện bỏ chữ cuối (phím chuẩn của ư là "uw", sẽ mất cách đọc w)
+                Some((text, _)) => keys_for(&text[..text.len() - text.chars().last().map_or(0, char::len_utf8)], self.cfg.telex.vni)
+                    .unwrap_or_default(),
+                None => self.comp.canonical_keys(1, self.cfg.modern),
+            }
         } else {
             let mut k = std::mem::take(&mut self.keys);
             k.pop();
@@ -656,7 +725,10 @@ impl<'a> Engine<'a> {
                     })
                 })
         });
-        let vn_p = vn_p.or_else(|| self.personal_vn().map(|u| penalty * self.contextual(Lang::Vn, u, |f| f.count(&canon(&vn_text)))));
+        let vn_p = vn_p.or_else(|| {
+            let u = self.personal_vn().or_else(|| self.teen_onset()).or_else(|| self.teen_w().map(|w| w.1))?;
+            Some(penalty * self.contextual(Lang::Vn, u, |f| f.count(&canon(&vn_text))))
+        });
         let (en_text, en_low, en_u) = self.en_side(|w| self.en_prefix(w), false);
         // Khoá ASCII chỉ có số thanh ở cuối, nên khoá ASCII trong khoảng tiền tố không dấu luôn bắt đầu bằng `en_low`.
         let en_p = en_u.map(|u| self.contextual(Lang::En, u, |f| f.prefix_class_sum(&en_low, crate::context::ASCII)));
