@@ -5,7 +5,6 @@
 import AppKit
 import CryptoKit
 import Security
-import UserNotifications
 
 struct UpdateError: Error, CustomStringConvertible {
     let description: String
@@ -183,20 +182,10 @@ enum Updater {
         Task {
             let result = await checkAndInstall()
             print(result)
-            if result.hasPrefix("Đã cập nhật") { await notify(result) }
+            if result.hasPrefix("Đã cập nhật") { await Notify.post(title: "Songngu", body: result + ".", ask: false) }
             done = true
         }
         while !done { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
         return 0
-    }
-
-    /// Báo cập nhật xong nếu người dùng đã cho phép thông báo (xin quyền lúc bật tự động cập nhật trong cửa sổ).
-    static func notify(_ text: String) async {
-        let center = UNUserNotificationCenter.current()
-        guard await center.notificationSettings().authorizationStatus == .authorized else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "Songngu"
-        content.body = text + "."
-        try? await center.add(UNNotificationRequest(identifier: "songngu-update", content: content, trigger: nil))
     }
 }

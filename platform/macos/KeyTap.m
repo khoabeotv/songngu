@@ -203,6 +203,58 @@ static BOOL createTap(void) {
     return YES;
 }
 
+// Chế độ nhập an toàn (ô mật khẩu, sudo trong terminal, AnyDesk...): macOS khoá mọi bộ gõ bên thứ ba, người dùng không
+// chọn lại được Songngu cho tới khi app giữ nó nhả ra. macOS không cho biết chính xác app nào giữ: lấy app trước mặt
+// lúc khoá bắt đầu (app có ô mật khẩu). Khoá còn mà người dùng đã sang app khác quá kSecureNotifyAfter giây (quên tắt,
+// như AnyDesk chạy nền) thì báo tên app đó, một lần mỗi lần bị khoá; hết khoá thì chọn lại Songngu nếu trước đó đang
+// dùng (macOS để lại ABC). Ô mật khẩu ngay trong app trước mặt là chuyện bình thường: không báo.
+static const NSTimeInterval kSecureNotifyAfter = 5;
+static BOOL gWasSelected;        // Songngu là nguồn nhập đang chọn ở lần kiểm gần nhất khi chưa bị khoá
+static BOOL gLocked;             // đang bị khoá
+static BOOL gLockedOut;          // bị khoá khi đang dùng Songngu
+static BOOL gNotified;
+static NSRunningApplication *gHolder;  // app trước mặt lúc khoá bắt đầu
+static NSDate *gAwaySince;       // người dùng rời app đó từ lúc này
+
+static void selectSelf(void) {
+    NSDictionary *filter = @{(__bridge NSString *)kTISPropertyBundleID : NSBundle.mainBundle.bundleIdentifier};
+    NSArray *srcs = CFBridgingRelease(TISCreateInputSourceList((__bridge CFDictionaryRef)filter, false));
+    if (srcs.count) TISSelectInputSource((__bridge TISInputSourceRef)srcs.firstObject);
+}
+
+static void checkSecureInput(void) {
+    NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
+    // đọc lại nguồn nhập: thông báo đổi nguồn có thể tới trước khi bộ gõ vừa khởi động kịp đăng ký nhận
+    updateSelected();
+    if (!IsSecureEventInputEnabled()) {
+        if (gLocked && gLockedOut && !gSelected) selectSelf();
+        gLocked = NO;
+        gWasSelected = gSelected;
+        return;
+    }
+    if (!gLocked) {
+        gLocked = YES;
+        gLockedOut = gWasSelected;
+        gHolder = front;
+        gAwaySince = nil;
+        gNotified = NO;
+    }
+    if (!gLockedOut || gNotified || !gHolder) return;
+    if (front.processIdentifier == gHolder.processIdentifier) {
+        gAwaySince = nil;
+        return;
+    }
+    if (!gAwaySince) gAwaySince = [NSDate date];
+    if (-[gAwaySince timeIntervalSinceNow] < kSecureNotifyAfter) return;
+    gNotified = YES;
+    // màn hình khoá, hộp thoại nhập mật khẩu của hệ thống: tự hết
+    NSString *bundle = gHolder.bundleIdentifier;
+    if (gHolder.terminated || [bundle isEqualToString:@"com.apple.loginwindow"] || [bundle isEqualToString:@"com.apple.SecurityAgent"]) return;
+    NSString *name = gHolder.localizedName ?: bundle;
+    songnguHelper(@[ @"--notify", @"Songngu tạm bị khoá",
+                    [NSString stringWithFormat:@"%@ đang giữ. Thoát %@ để gõ tiếng Việt.", name, name] ]);
+}
+
 // status.tsv cho cửa sổ cài đặt (tiến trình khác, không tự hỏi được quyền của bộ gõ): ghi lại khi trạng thái đổi.
 static void writeStatus(void) {
     static NSString *last;
@@ -246,6 +298,8 @@ void keyTapStart(void) {
                                                             }];
     createTap();
     writeStatus();
+    gWasSelected = gSelected;
+    [NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *t) { checkSecureInput(); }];
     // chưa có quyền Trợ năng: thử lại tới khi người dùng cấp (không cần khởi động lại bộ gõ); quyền có thể bị gỡ bất cứ lúc
     // nào nên trạng thái cho cửa sổ cài đặt luôn được cập nhật
     [NSTimer scheduledTimerWithTimeInterval:3

@@ -12,6 +12,8 @@ NSString *songnguSupportFile(NSString *name);
 SnHandle *songnguEngine(void);
 // Đổi app đang gõ: kết thúc từ dở ở app cũ rồi áp cài đặt của app mới.
 void songnguSetApp(NSString *bundle);
+// Chạy cửa sổ cài đặt ngầm với tham số (--update, --notify): bộ gõ không truy cập mạng, không tự hiện thông báo.
+void songnguHelper(NSArray<NSString *> *args);
 // Ghi vết (file `trace` có sẵn lúc bộ gõ chạy): trace.log, xem SongnguController.m.
 BOOL songnguTracing(void);
 void songnguTrace(NSString *what);

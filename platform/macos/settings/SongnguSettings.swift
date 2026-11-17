@@ -11,6 +11,10 @@ enum Main {
         if args.contains("--update") {
             exit(Updater.runHeadless(force: args.contains("--force")))
         }
+        // bộ gõ nhờ hiện thông báo (Notify.swift)
+        if let i = args.firstIndex(of: "--notify"), i + 2 < args.count {
+            exit(Notify.runHeadless(title: args[i + 1], body: args[i + 2]))
+        }
         SongnguSettingsApp.main()
     }
 }

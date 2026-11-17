@@ -7,6 +7,12 @@
 
 static IMKServer *gServer;
 
+void songnguHelper(NSArray<NSString *> *args) {
+    NSURL *exe = [NSBundle.mainBundle.bundleURL
+        URLByAppendingPathComponent:@"Contents/Helpers/SongnguSettings.app/Contents/MacOS/SongnguSettings"];
+    [NSTask launchedTaskWithExecutableURL:exe arguments:args error:nil terminationHandler:nil];
+}
+
 // Tự cập nhật (tuỳ chọn auto_update): bộ gõ không truy cập mạng, chỉ gọi cửa sổ cài đặt chạy ngầm; cửa sổ tự giới hạn
 // mỗi ngày một lần và tự thay Songngu.app (settings/Updater.swift).
 static void checkUpdate(void) {
@@ -14,9 +20,7 @@ static void checkUpdate(void) {
     if (!h) return;
     sn_reload(h);
     if (!sn_option_get(h, "auto_update")) return;
-    NSURL *exe = [NSBundle.mainBundle.bundleURL
-        URLByAppendingPathComponent:@"Contents/Helpers/SongnguSettings.app/Contents/MacOS/SongnguSettings"];
-    [NSTask launchedTaskWithExecutableURL:exe arguments:@[ @"--update" ] error:nil terminationHandler:nil];
+    songnguHelper(@[ @"--update" ]);
 }
 
 int main(int argc, const char *argv[]) {
